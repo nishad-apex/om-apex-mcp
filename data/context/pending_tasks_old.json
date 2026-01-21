@@ -1,0 +1,486 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-01-21",
+  "source": "Om_Apex_Master_Decision_Log_v1.1.docx and README.md",
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "description": "Review Part 6 RAG article draft and publish",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "due": "2026-01-19",
+      "status": "pending",
+      "notes": "Article: AI_in_Supply_Chain_-_6_of_10_RAG_DRAFT.docx"
+    },
+    {
+      "id": "TASK-002",
+      "description": "Subscribe to Vercel and deploy Om Luxe site",
+      "category": "Technical",
+      "company": "Om Luxe Properties",
+      "priority": "High",
+      "status": "completed",
+      "completed_at": "2026-01-19T10:37:29.152503"
+    },
+    {
+      "id": "TASK-003",
+      "description": "Call Scroggin & Burns for legal consultation",
+      "category": "Legal",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "contact": "(770) 884-7197"
+    },
+    {
+      "id": "TASK-004",
+      "description": "Call Morgan & DiSalvo for legal consultation",
+      "category": "Legal",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "contact": "(678) 720-0750"
+    },
+    {
+      "id": "TASK-005",
+      "description": "Approve GoDaddy transfer email when it arrives",
+      "category": "Technical",
+      "company": "Om AI Solutions",
+      "priority": "Medium",
+      "status": "pending",
+      "notes": "For omaisolutions.com transfer to Cloudflare"
+    },
+    {
+      "id": "TASK-006",
+      "description": "Watch for Replit refund response",
+      "category": "Administrative",
+      "company": "Om Apex Holdings",
+      "priority": "Low",
+      "status": "completed",
+      "completed_at": "2026-01-21T15:46:19.184157"
+    },
+    {
+      "id": "TASK-007",
+      "description": "Review HTLR improvement plan when received",
+      "category": "Operations",
+      "company": "Om Luxe Properties",
+      "priority": "Medium",
+      "status": "pending",
+      "notes": "Home Team Luxury Rentals is developing a plan to improve revenue and bookings"
+    },
+    {
+      "id": "TASK-008",
+      "description": "Build Om Apex MCP Server",
+      "category": "Technical",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "in_progress",
+      "notes": "Proof of concept for Enterprise MCP Knowledge Base product"
+    },
+    {
+      "id": "TASK-009",
+      "description": "Discuss Om Supply Chain LLC (4th entity) with attorneys - separate SaaS products from AI consulting",
+      "category": "Legal",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-19T11:01:11.783793",
+      "notes": "Bring domain inventory showing product-to-entity mapping. Get advice on timing, tax implications, and optimal structure."
+    },
+    {
+      "id": "TASK-010",
+      "description": "Add Facebook page URL to Om Luxe website footer",
+      "category": "Technical",
+      "company": "Om Luxe Properties",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-19",
+      "notes": "Update footer on all 7 pages (index, amenities, todo, attractions, restaurants, rules, howto) with actual Facebook page URL"
+    },
+    {
+      "id": "TASK-011",
+      "description": "Add GHL/HubSpot contact form embed to Om Luxe website",
+      "category": "Technical",
+      "company": "Om Luxe Properties",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-19",
+      "notes": "Embed contact form code in modal on all 7 pages. Currently shows placeholder text."
+    },
+    {
+      "id": "TASK-012",
+      "description": "Add content to Amenities page",
+      "category": "Content",
+      "company": "Om Luxe Properties",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-19",
+      "notes": "Hot tub, mountain views, fully equipped kitchen, bedrooms, etc. Currently shows placeholder."
+    },
+    {
+      "id": "TASK-013",
+      "description": "Add content to Things to Do page",
+      "category": "Content",
+      "company": "Om Luxe Properties",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-19",
+      "notes": "Activities and experiences at/near the property. Currently shows placeholder."
+    },
+    {
+      "id": "TASK-014",
+      "description": "Add content to Attractions page",
+      "category": "Content",
+      "company": "Om Luxe Properties",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-19",
+      "notes": "Local attractions near Ellijay, GA. Currently shows placeholder."
+    },
+    {
+      "id": "TASK-015",
+      "description": "Add content to Restaurants page",
+      "category": "Content",
+      "company": "Om Luxe Properties",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-19",
+      "notes": "Local restaurant recommendations near Ellijay, GA. Currently shows placeholder."
+    },
+    {
+      "id": "TASK-016",
+      "description": "Add content to House Rules page",
+      "category": "Content",
+      "company": "Om Luxe Properties",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-19",
+      "notes": "Property rules, check-in/out times, policies, etc. Currently shows placeholder."
+    },
+    {
+      "id": "TASK-017",
+      "description": "Setup a meeting with Scroggin attorney",
+      "category": "Legal",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:04.768599",
+      "notes": "Follow up on voicemail left earlier"
+    },
+    {
+      "id": "TASK-018",
+      "description": "Complete the 2026 financial budget and anticipated spend",
+      "category": "Administrative",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:08.413007"
+    },
+    {
+      "id": "TASK-019",
+      "description": "Create Om Supply Chain LLC (the new tax attorney when selected may do this)",
+      "category": "Legal",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:11.452140"
+    },
+    {
+      "id": "TASK-020",
+      "description": "Get EIN for Om Supply Chain LLC (may be done by tax attorney)",
+      "category": "Legal",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:14.316578"
+    },
+    {
+      "id": "TASK-021",
+      "description": "Get the legal structure protected by trusts and things as per tax attorney",
+      "category": "Legal",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:17.191102"
+    },
+    {
+      "id": "TASK-022",
+      "description": "Build Om Apex website (Sumedha)",
+      "category": "Technical",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:20.482033"
+    },
+    {
+      "id": "TASK-023",
+      "description": "Build Om AI Solutions website (Sumedha)",
+      "category": "Technical",
+      "company": "Om AI Solutions",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:23.434821"
+    },
+    {
+      "id": "TASK-024",
+      "description": "Build Om Supply Chain website (Sumedha)",
+      "category": "Technical",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:26.923314"
+    },
+    {
+      "id": "TASK-025",
+      "description": "Finalize on Om AI Solutions offerings (Nishad)",
+      "category": "Operations",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:30.044929"
+    },
+    {
+      "id": "TASK-026",
+      "description": "Finalize on Om WMS PRD (Nishad)",
+      "category": "Technical",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:33.261084"
+    },
+    {
+      "id": "TASK-027",
+      "description": "Create PRDs for each Om AI Solutions offerings (Nishad)",
+      "category": "Technical",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:36:36.755137"
+    },
+    {
+      "id": "TASK-028",
+      "description": "Get HubSpot subscription (Nishad)",
+      "category": "Operations",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:40.104186"
+    },
+    {
+      "id": "TASK-029",
+      "description": "Get phone numbers for all 4 LLCs (Nishad - may be Twilio?)",
+      "category": "Operations",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:44.348977"
+    },
+    {
+      "id": "TASK-030",
+      "description": "Create AI Assistants to answer phones for all 4 LLCs (Sumedha)",
+      "category": "Technical",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:48.708136"
+    },
+    {
+      "id": "TASK-031",
+      "description": "Update Om Luxe Properties website with HTLR reference (Sumedha - since HTLR actually manages our property)",
+      "category": "Technical",
+      "company": "Om Luxe Properties",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:52.477983"
+    },
+    {
+      "id": "TASK-032",
+      "description": "Get links to all the other sites where Perch in the Clouds is marketed, such as VRBO (Nishad to get this from Tony)",
+      "category": "Marketing",
+      "company": "Om Luxe Properties",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:36:57.061036"
+    },
+    {
+      "id": "TASK-033",
+      "description": "Confirm that garbage is being picked properly and garbage bag is replaced by Cantrell's garbage pickup guy (Nishad)",
+      "category": "Operations",
+      "company": "Om Luxe Properties",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:37:02.277491"
+    },
+    {
+      "id": "TASK-034",
+      "description": "Cancel Hot Tub cleaning service from Georgia Spa (Nishad)",
+      "category": "Operations",
+      "company": "Om Luxe Properties",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:37:07.093313"
+    },
+    {
+      "id": "TASK-035",
+      "description": "Once Empower's cash transfer is done, move $2000 to Bank of America (Om AI Solutions) and $5000+ to Regions Bank (Om Luxe Properties)",
+      "category": "Administrative",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:37:11.370788"
+    },
+    {
+      "id": "TASK-036",
+      "description": "Add Communication mastery to daily routine (Nishad)",
+      "category": "Operations",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:37:18.543320"
+    },
+    {
+      "id": "TASK-037",
+      "description": "Add Geeta reading to daily routine (Nishad)",
+      "category": "Operations",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:37:23.415329"
+    },
+    {
+      "id": "TASK-038",
+      "description": "Document list of subjects for the remaining articles in the AI in Supply Chain article series for blogging (Claude and Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:37:27.853538"
+    },
+    {
+      "id": "TASK-039",
+      "description": "Create a blog for Om AI Solutions and place published articles on the blog, point all LinkedIn posts to this blog (Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:37:36.943556"
+    },
+    {
+      "id": "TASK-040",
+      "description": "Complete the rest of the AI in Supply Chain articles by end of January - create a timeline for each article and stick to it (Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:37:41.817793",
+      "notes": "VERY IMPORTANT - deadline driven"
+    },
+    {
+      "id": "TASK-041",
+      "description": "Make a list of other blog subjects after article series, such as creating your own MCP server (Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:37:47.300273"
+    },
+    {
+      "id": "TASK-042",
+      "description": "Think about how to create an image of a Supply Chain thought leader in the next 4-6 months (Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:37:57.224713"
+    },
+    {
+      "id": "TASK-043",
+      "description": "Think about how to slowly bring the Om group of companies to lime light - don't come forward with nothing to offer (Nishad, Sumedha and AI partners)",
+      "category": "Marketing",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:38:02.790142"
+    },
+    {
+      "id": "TASK-044",
+      "description": "Finalize the Warehouse maturity study template and test it by putting it on Om Supply Chain website (Nishad)",
+      "category": "Technical",
+      "company": "Om Apex Holdings",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:38:09.564302"
+    },
+    {
+      "id": "TASK-045",
+      "description": "Finalize the AI maturity study template and test it by putting it on Om AI Solutions website (Nishad)",
+      "category": "Technical",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:38:20.434383"
+    },
+    {
+      "id": "TASK-046",
+      "description": "Put the word out that Nishad (30+ year supply chain leader) is available as a fractional supply chain guru for $250/hour - think of a way to advertise (Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:38:25.950889"
+    },
+    {
+      "id": "TASK-047",
+      "description": "Work on Facebook, Instagram and X promotions of the three LLCs that actually do business (Nishad)",
+      "category": "Marketing",
+      "company": "Om Apex Holdings",
+      "priority": "Medium",
+      "status": "pending",
+      "created": "2026-01-21T15:38:35.112618"
+    },
+    {
+      "id": "TASK-048",
+      "description": "Find out about all supply chain related events that give opportunity to meet target customers - plan to visit with a fixed budget (Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:38:45.907126"
+    },
+    {
+      "id": "TASK-049",
+      "description": "Find out about Atlanta based customers from Chamber of Commerce and other means such as Apollo.io and HubSpot tools (Nishad)",
+      "category": "Marketing",
+      "company": "Om AI Solutions",
+      "priority": "High",
+      "status": "pending",
+      "created": "2026-01-21T15:38:50.891037"
+    }
+  ],
+  "product_development": [
+    {
+      "product": "Warehouse Maturity Study",
+      "status": "Concept defined",
+      "next_step": "Develop detailed framework"
+    },
+    {
+      "product": "AI Maturity Study",
+      "status": "Concept defined",
+      "next_step": "Develop detailed framework"
+    },
+    {
+      "product": "Voice Agents for SMBs",
+      "status": "Concept defined",
+      "next_step": "Create detailed spec"
+    },
+    {
+      "product": "Enterprise MCP Knowledge Base Server",
+      "status": "Concept defined",
+      "next_step": "Create detailed architecture"
+    },
+    {
+      "product": "Self-Learning WMS",
+      "status": "Planning",
+      "target": "Q2 2026 MVP"
+    }
+  ]
+}

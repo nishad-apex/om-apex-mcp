@@ -11,6 +11,7 @@ Started: January 19, 2026
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -116,6 +117,10 @@ async def list_tools() -> list[Tool]:
                     "status": {
                         "type": "string",
                         "description": "Filter by status: pending, in_progress, completed (optional)"
+                    },
+                    "owner": {
+                        "type": "string",
+                        "description": "Filter by owner: Nishad, Sumedha, Both (optional)"
                     }
                 },
                 "required": []
@@ -123,21 +128,21 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="add_task",
-            description="Add a new task to the pending tasks list",
+            description="Add a new task to the pending tasks list. Owner can be specified in parentheses at end of description, e.g. 'Build website (Sumedha)'",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "description": {
                         "type": "string",
-                        "description": "Description of the task"
+                        "description": "Description of the task. Include owner in parentheses at end, e.g. 'Build website (Sumedha)'"
                     },
                     "category": {
                         "type": "string",
-                        "description": "Category: Technical, Marketing, Legal, Operations, Administrative"
+                        "description": "Category: Technical, Marketing, Legal, Operations, Administrative, Content"
                     },
                     "company": {
                         "type": "string",
-                        "description": "Company: Om Apex Holdings, Om Luxe Properties, Om AI Solutions"
+                        "description": "Company: Om Apex Holdings, Om Luxe Properties, Om AI Solutions, Om Supply Chain"
                     },
                     "priority": {
                         "type": "string",
@@ -271,6 +276,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         company = arguments.get("company")
         category = arguments.get("category")
         status = arguments.get("status")
+        owner = arguments.get("owner")
 
         if company:
             tasks = [t for t in tasks if t.get("company", "").lower() == company.lower()]
@@ -278,6 +284,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             tasks = [t for t in tasks if t.get("category", "").lower() == category.lower()]
         if status:
             tasks = [t for t in tasks if t.get("status", "").lower() == status.lower()]
+        if owner:
+            tasks = [t for t in tasks if t.get("owner", "").lower() == owner.lower()]
 
         return [TextContent(type="text", text=json.dumps(tasks, indent=2))]
 
@@ -297,16 +305,30 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     pass
         new_id = f"TASK-{max_num + 1:03d}"
 
+        # Parse owner from description if present (e.g., "Build website (Sumedha)")
+        description = arguments["description"]
+        owner = None
+        owner_match = re.search(r'\((\w+)\)\s*$', description)
+        if owner_match:
+            potential_owner = owner_match.group(1)
+            # Only extract if it looks like a name (Nishad, Sumedha, Both, Claude)
+            if potential_owner.lower() in ['nishad', 'sumedha', 'both', 'claude']:
+                owner = potential_owner.capitalize()
+                # Remove owner from description for cleaner storage
+                description = re.sub(r'\s*\(\w+\)\s*$', '', description)
+
         # Create new task
         new_task = {
             "id": new_id,
-            "description": arguments["description"],
+            "description": description,
             "category": arguments["category"],
             "company": arguments["company"],
             "priority": arguments["priority"],
             "status": "pending",
             "created": datetime.now().isoformat()
         }
+        if owner:
+            new_task["owner"] = owner
         if arguments.get("notes"):
             new_task["notes"] = arguments["notes"]
 

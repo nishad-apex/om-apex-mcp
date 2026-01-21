@@ -1,8 +1,7 @@
 {
   "version": "1.0",
-  "last_updated": "2026-01-19",
+  "last_updated": "2026-01-21",
   "source": "Om_Apex_Master_Decision_Log_v1.1.docx",
-
   "decisions": [
     {
       "id": "TECH-001",
@@ -21,18 +20,30 @@
           "framework": "Next.js 15",
           "styling": "Tailwind + Shadcn UI",
           "hosting": "Vercel",
-          "features": ["Real-time dashboards", "Warehouse map", "Mobile responsive"]
+          "features": [
+            "Real-time dashboards",
+            "Warehouse map",
+            "Mobile responsive"
+          ]
         },
         "backend": {
           "language": "Python",
           "framework": "FastAPI",
           "hosting": "Render",
-          "ai_components": ["LangGraph agents", "MCP server", "Claude API"]
+          "ai_components": [
+            "LangGraph agents",
+            "MCP server",
+            "Claude API"
+          ]
         },
         "database": {
           "primary": "Supabase (Postgres)",
-          "features": ["Row Level Security", "Realtime", "Multi-tenant data isolation"],
-          "scaling_path": "Supabase → Citus (horizontal sharding) or CockroachDB for global scale"
+          "features": [
+            "Row Level Security",
+            "Realtime",
+            "Multi-tenant data isolation"
+          ],
+          "scaling_path": "Supabase \u2192 Citus (horizontal sharding) or CockroachDB for global scale"
         }
       },
       "rationale": "Gemini's key insight about Python for AI agents"
@@ -44,7 +55,7 @@
       "confidence": "High",
       "decision": "LangGraph",
       "use_cases": [
-        "Self-healing agent (analyze logs → suggest fixes → apply with approval)",
+        "Self-healing agent (analyze logs \u2192 suggest fixes \u2192 apply with approval)",
         "Optimization agent (reorder points, picking routes)",
         "Integration agent (scout APIs, generate code)"
       ],
@@ -62,10 +73,30 @@
       "area": "Static Sites",
       "date_decided": "2026-01-18",
       "confidence": "High",
-      "applies_to": ["Om Apex website", "Om Luxe promo site"]
+      "applies_to": [
+        "Om Apex website",
+        "Om Luxe promo site"
+      ]
+    },
+    {
+      "id": "TECH-006",
+      "area": "Infrastructure",
+      "date_decided": "2026-01-21",
+      "confidence": "High",
+      "decision": "Sumedha's laptop runs Windows 11, not macOS",
+      "rationale": "Need to maintain Windows-compatible setup instructions for MCP server and Claude Code. Nishad uses macOS, Sumedha uses Windows 11.",
+      "company": "Om Apex Holdings"
+    },
+    {
+      "id": "TECH-007",
+      "area": "Infrastructure",
+      "date_decided": "2026-01-21",
+      "confidence": "High",
+      "decision": "Sumedha will use Claude Pro subscription (not Max) because Claude Max Cowork tab is Mac-only",
+      "rationale": "Claude Max's Cowork feature is only available on macOS. Since Sumedha uses Windows 11, Claude Pro is the appropriate subscription tier for her.",
+      "company": "Om Apex Holdings"
     }
   ],
-
   "architecture_diagram": {
     "description": "Three-tier architecture with clear separation",
     "tiers": [
