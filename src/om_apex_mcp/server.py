@@ -269,7 +269,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="add_daily_progress",
-            description="Add a session entry to the daily progress log. Creates file if it doesn't exist for today.",
+            description="Add a session entry to the daily progress log. Creates file if it doesn't exist for today. Uses structured data to build consistent markdown formatting.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -285,12 +285,38 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Brief title for this session (e.g., 'MCP Server Setup')"
                     },
-                    "content": {
-                        "type": "string",
-                        "description": "The full session progress content in markdown format"
+                    "completed": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of items completed during the session"
+                    },
+                    "decisions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of decisions recorded (format: 'ID: Description')"
+                    },
+                    "tasks_completed": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of tasks marked complete (format: 'ID: Description')"
+                    },
+                    "tasks_created": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of new tasks created (format: 'ID: Description')"
+                    },
+                    "files_modified": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of files created/modified (format: 'path - description')"
+                    },
+                    "notes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Additional notes for future reference"
                     }
                 },
-                "required": ["person", "interface", "title", "content"]
+                "required": ["person", "interface", "title"]
             }
         ),
         Tool(
@@ -448,7 +474,37 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         pending_tasks = [t for t in tasks.get("tasks", []) if t.get("status") != "completed"]
         high_priority = [t for t in pending_tasks if t.get("priority") == "High"]
 
+        # Build the exact display text for consistent output across all platforms
+        display_text = f"""Full context loaded.
+
+**Quick Summary:** {len(pending_tasks)} pending tasks ({len(high_priority)} high priority)
+
+How can I help you today?"""
+
         summary = {
+            "display": {
+                "INSTRUCTION": "Output EXACTLY the text in 'output' below - nothing more, nothing less. This ensures consistent greeting across all Claude platforms.",
+                "output": display_text
+            },
+            "session_workflow": {
+                "session_end": {
+                    "trigger": "When user says 'end session', 'wrap up', 'save our work', or similar",
+                    "steps": [
+                        "1. Review conversation for: decisions made, tasks completed, new tasks identified",
+                        "2. Summarize findings to user and get confirmation",
+                        "3. Call add_decision for each decision (area, decision, rationale, company)",
+                        "4. Call add_task for each new task",
+                        "5. Call complete_task for each completed task",
+                        "6. Call add_daily_progress with: person, interface, title, completed, decisions, tasks_completed, tasks_created, files_modified, notes",
+                        "7. Confirm everything was saved"
+                    ]
+                },
+                "mcp_server_code_location": "/Users/nishad/om-apex/om-ai/om-apex-mcp/ (main: src/om_apex_mcp/server.py)"
+            },
+            "available_tools": {
+                "reading": ["get_full_context", "get_company_context", "get_technology_decisions", "get_decisions_history", "get_domain_inventory", "get_pending_tasks", "get_daily_progress", "search_daily_progress"],
+                "writing": ["add_task", "complete_task", "update_task_status", "add_decision", "add_daily_progress"]
+            },
             "company_overview": {
                 "holding_company": company.get("holding_company", {}).get("name"),
                 "subsidiaries": [s.get("name") for s in company.get("subsidiaries", [])],
@@ -551,7 +607,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         person = arguments["person"]
         interface = arguments["interface"].lower()
         title = arguments["title"]
-        content = arguments["content"]
 
         # Ensure directory exists
         DAILY_PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
@@ -570,14 +625,71 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if filepath.exists():
             with open(filepath, "r", encoding="utf-8") as f:
                 existing_content = f.read()
-            # Count existing sessions
+            # Count existing sessions using regex to find max (handles gaps)
             session_matches = re.findall(r"## Session (\d+)", existing_content)
             if session_matches:
                 session_num = max(int(n) for n in session_matches) + 1
 
-        # Build the session entry
-        session_header = f"## Session {session_num} (by {person}) ({interface}) ({timestamp}) - {title}"
-        session_entry = f"\n---\n\n{session_header}\n\n{content}\n"
+        # Build the session entry from structured data
+        session_parts = []
+        session_parts.append(f"\n---\n")
+        session_parts.append(f"\n## Session {session_num} ({interface}) (by {person}) ({timestamp}) - {title}\n")
+
+        # Add completed items
+        completed = arguments.get("completed", [])
+        if completed:
+            session_parts.append("\n### Completed\n")
+            for item in completed:
+                session_parts.append(f"- {item}\n")
+
+        # Add decisions
+        decisions = arguments.get("decisions", [])
+        if decisions:
+            session_parts.append("\n### Decisions Recorded\n")
+            for item in decisions:
+                if ":" in item:
+                    parts = item.split(":", 1)
+                    session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
+                else:
+                    session_parts.append(f"- **{item}**\n")
+
+        # Add tasks completed
+        tasks_completed = arguments.get("tasks_completed", [])
+        if tasks_completed:
+            session_parts.append("\n### Tasks Completed\n")
+            for item in tasks_completed:
+                if ":" in item:
+                    parts = item.split(":", 1)
+                    session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
+                else:
+                    session_parts.append(f"- **{item}**\n")
+
+        # Add tasks created
+        tasks_created = arguments.get("tasks_created", [])
+        if tasks_created:
+            session_parts.append("\n### Tasks Created\n")
+            for item in tasks_created:
+                if ":" in item:
+                    parts = item.split(":", 1)
+                    session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
+                else:
+                    session_parts.append(f"- **{item}**\n")
+
+        # Add files modified
+        files_modified = arguments.get("files_modified", [])
+        if files_modified:
+            session_parts.append("\n### Files Created/Modified\n")
+            for item in files_modified:
+                session_parts.append(f"- {item}\n")
+
+        # Add notes
+        notes = arguments.get("notes", [])
+        if notes:
+            session_parts.append("\n### Notes\n")
+            for item in notes:
+                session_parts.append(f"- {item}\n")
+
+        session_entry = "".join(session_parts)
 
         # Write to file
         if existing_content:
