@@ -8,10 +8,22 @@ from mcp.types import Tool, TextContent
 
 from . import ToolModule
 from .helpers import load_json, save_json
+from ..supabase_client import (
+    is_supabase_available,
+    get_tasks as sb_get_tasks,
+    add_task as sb_add_task,
+    update_task as sb_update_task,
+    get_next_task_id,
+)
 
 
 READING = ["get_pending_tasks"]
 WRITING = ["add_task", "complete_task", "update_task_status", "update_task"]
+
+
+def _use_supabase() -> bool:
+    """Check if we should use Supabase for task operations."""
+    return is_supabase_available()
 
 
 def register() -> ToolModule:
@@ -90,6 +102,17 @@ def register() -> ToolModule:
 
     async def handler(name: str, arguments: dict):
         if name == "get_pending_tasks":
+            # Use Supabase if available
+            if _use_supabase():
+                tasks = sb_get_tasks(
+                    company=arguments.get("company"),
+                    category=arguments.get("category"),
+                    status=arguments.get("status"),
+                    owner=arguments.get("owner"),
+                )
+                return [TextContent(type="text", text=json.dumps(tasks, indent=2))]
+
+            # Fallback to JSON file
             data = load_json("pending_tasks.json")
             tasks = data.get("tasks", [])
 
@@ -110,6 +133,34 @@ def register() -> ToolModule:
             return [TextContent(type="text", text=json.dumps(tasks, indent=2))]
 
         elif name == "add_task":
+            description = arguments["description"]
+            owner = None
+            owner_match = re.search(r'\(([A-Za-z]+)\)\s*$', description)
+            if owner_match:
+                owner = owner_match.group(1).capitalize()
+                description = re.sub(r'\s*\([A-Za-z]+\)\s*$', '', description)
+
+            # Use Supabase if available
+            if _use_supabase():
+                new_id = get_next_task_id()
+                new_task = {
+                    "id": new_id,
+                    "description": description,
+                    "category": arguments["category"],
+                    "company": arguments["company"],
+                    "priority": arguments["priority"],
+                    "status": "pending",
+                    "created_at": datetime.now().isoformat(),
+                }
+                if owner:
+                    new_task["owner"] = owner
+                if arguments.get("notes"):
+                    new_task["notes"] = arguments["notes"]
+
+                result = sb_add_task(new_task)
+                return [TextContent(type="text", text=f"Task created successfully:\n{json.dumps(result, indent=2)}")]
+
+            # Fallback to JSON file
             data = load_json("pending_tasks.json")
             tasks = data.get("tasks", [])
 
@@ -122,13 +173,6 @@ def register() -> ToolModule:
                     except ValueError:
                         pass
             new_id = f"TASK-{max_num + 1:03d}"
-
-            description = arguments["description"]
-            owner = None
-            owner_match = re.search(r'\(([A-Za-z]+)\)\s*$', description)
-            if owner_match:
-                owner = owner_match.group(1).capitalize()
-                description = re.sub(r'\s*\([A-Za-z]+\)\s*$', '', description)
 
             new_task = {
                 "id": new_id,
@@ -152,10 +196,41 @@ def register() -> ToolModule:
             return [TextContent(type="text", text=f"Task created successfully:\n{json.dumps(new_task, indent=2)}")]
 
         elif name == "complete_task":
-            data = load_json("pending_tasks.json")
-            tasks = data.get("tasks", [])
             task_id = arguments["task_id"]
             completion_notes = arguments.get("notes")
+
+            # Use Supabase if available
+            if _use_supabase():
+                # First get the existing task to merge notes
+                existing_tasks = sb_get_tasks()
+                existing_task = next((t for t in existing_tasks if t.get("id") == task_id), None)
+
+                if not existing_task:
+                    return [TextContent(type="text", text=f"Task {task_id} not found")]
+
+                updates = {
+                    "status": "completed",
+                    "completed_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
+                }
+
+                if completion_notes:
+                    existing_notes = existing_task.get("notes", "") or ""
+                    if existing_notes:
+                        updates["completion_notes"] = completion_notes
+                        updates["notes"] = f"{existing_notes}\n\n[Completed] {completion_notes}"
+                    else:
+                        updates["completion_notes"] = completion_notes
+                        updates["notes"] = f"[Completed] {completion_notes}"
+
+                result = sb_update_task(task_id, updates)
+                if result:
+                    return [TextContent(type="text", text=f"Task {task_id} marked as completed:\n{json.dumps(result, indent=2)}")]
+                return [TextContent(type="text", text=f"Task {task_id} not found")]
+
+            # Fallback to JSON file
+            data = load_json("pending_tasks.json")
+            tasks = data.get("tasks", [])
 
             for task in tasks:
                 if task.get("id") == task_id:
@@ -176,13 +251,29 @@ def register() -> ToolModule:
             return [TextContent(type="text", text=f"Task {task_id} not found")]
 
         elif name == "update_task_status":
-            data = load_json("pending_tasks.json")
-            tasks = data.get("tasks", [])
             task_id = arguments["task_id"]
             new_status = arguments["status"]
 
             if new_status not in ["pending", "in_progress", "completed"]:
                 return [TextContent(type="text", text=f"Invalid status: {new_status}. Must be pending, in_progress, or completed")]
+
+            # Use Supabase if available
+            if _use_supabase():
+                updates = {
+                    "status": new_status,
+                    "updated_at": datetime.now().isoformat(),
+                }
+                if new_status == "completed":
+                    updates["completed_at"] = datetime.now().isoformat()
+
+                result = sb_update_task(task_id, updates)
+                if result:
+                    return [TextContent(type="text", text=f"Task {task_id} status updated to {new_status}:\n{json.dumps(result, indent=2)}")]
+                return [TextContent(type="text", text=f"Task {task_id} not found")]
+
+            # Fallback to JSON file
+            data = load_json("pending_tasks.json")
+            tasks = data.get("tasks", [])
 
             for task in tasks:
                 if task.get("id") == task_id:
@@ -197,9 +288,47 @@ def register() -> ToolModule:
             return [TextContent(type="text", text=f"Task {task_id} not found")]
 
         elif name == "update_task":
+            task_id = arguments["task_id"]
+
+            # Use Supabase if available
+            if _use_supabase():
+                updates = {}
+                updated_fields = []
+
+                if arguments.get("description"):
+                    updates["description"] = arguments["description"]
+                    updated_fields.append("description")
+                if arguments.get("notes"):
+                    updates["notes"] = arguments["notes"]
+                    updated_fields.append("notes")
+                if arguments.get("priority"):
+                    if arguments["priority"] not in ["High", "Medium", "Low"]:
+                        return [TextContent(type="text", text=f"Invalid priority: {arguments['priority']}. Must be High, Medium, or Low")]
+                    updates["priority"] = arguments["priority"]
+                    updated_fields.append("priority")
+                if arguments.get("category"):
+                    updates["category"] = arguments["category"]
+                    updated_fields.append("category")
+                if arguments.get("company"):
+                    updates["company"] = arguments["company"]
+                    updated_fields.append("company")
+                if arguments.get("owner"):
+                    updates["owner"] = arguments["owner"]
+                    updated_fields.append("owner")
+
+                if not updates:
+                    return [TextContent(type="text", text=f"No updates provided for task {task_id}")]
+
+                updates["updated_at"] = datetime.now().isoformat()
+                result = sb_update_task(task_id, updates)
+
+                if result:
+                    return [TextContent(type="text", text=f"Task {task_id} updated successfully.\nUpdated fields: {', '.join(updated_fields)}\n\n{json.dumps(result, indent=2)}")]
+                return [TextContent(type="text", text=f"Task {task_id} not found")]
+
+            # Fallback to JSON file
             data = load_json("pending_tasks.json")
             tasks = data.get("tasks", [])
-            task_id = arguments["task_id"]
 
             for task in tasks:
                 if task.get("id") == task_id:

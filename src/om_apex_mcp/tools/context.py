@@ -7,6 +7,19 @@ from mcp.types import Tool, TextContent
 
 from . import ToolModule
 from .helpers import load_json, save_json, get_claude_instructions_data
+from ..supabase_client import (
+    is_supabase_available,
+    get_decisions as sb_get_decisions,
+    add_decision as sb_add_decision,
+    get_next_decision_id,
+    get_task_count,
+    get_tasks as sb_get_tasks,
+)
+
+
+def _use_supabase() -> bool:
+    """Check if we should use Supabase for operations."""
+    return is_supabase_available()
 
 
 READING = [
@@ -88,6 +101,12 @@ def register(all_reading_tools: list[str], all_writing_tools: list[str]) -> Tool
             return [TextContent(type="text", text=json.dumps(data, indent=2))]
 
         elif name == "get_technology_decisions":
+            # Use Supabase if available
+            if _use_supabase():
+                decisions = sb_get_decisions()
+                return [TextContent(type="text", text=json.dumps({"decisions": decisions}, indent=2))]
+
+            # Fallback to JSON file
             data = load_json("technology_decisions.json")
             return [TextContent(type="text", text=json.dumps(data, indent=2))]
 
@@ -101,20 +120,49 @@ def register(all_reading_tools: list[str], all_writing_tools: list[str]) -> Tool
 
         elif name == "get_full_context":
             company = load_json("company_structure.json")
-            decisions = load_json("technology_decisions.json")
-            tasks = load_json("pending_tasks.json")
             domains = load_json("domain_inventory.json")
 
-            pending_tasks = [t for t in tasks.get("tasks", []) if t.get("status") != "completed"]
-            high_priority = [t for t in pending_tasks if t.get("priority") == "High"]
+            # Use Supabase for tasks/decisions if available
+            if _use_supabase():
+                task_counts = get_task_count()
+                pending_count = task_counts["pending"] + task_counts["in_progress"]
+                high_priority_count = task_counts["high_priority"]
+
+                # Get high priority tasks for display
+                all_tasks = sb_get_tasks()
+                high_priority_tasks = [
+                    t for t in all_tasks
+                    if t.get("priority") == "High" and t.get("status") != "completed"
+                ]
+
+                decisions_list = sb_get_decisions()
+            else:
+                # Fallback to JSON files
+                decisions_data = load_json("technology_decisions.json")
+                decisions_list = decisions_data.get("decisions", [])
+                tasks_data = load_json("pending_tasks.json")
+                all_tasks = tasks_data.get("tasks", [])
+                pending_tasks = [t for t in all_tasks if t.get("status") != "completed"]
+                pending_count = len(pending_tasks)
+                high_priority_tasks = [t for t in pending_tasks if t.get("priority") == "High"]
+                high_priority_count = len(high_priority_tasks)
 
             display_text = f"""Full context loaded.
 
-**Quick Summary:** {len(pending_tasks)} pending tasks ({len(high_priority)} high priority)
+**Quick Summary:** {pending_count} pending tasks ({high_priority_count} high priority)
 
 How can I help you today?"""
 
             instructions = get_claude_instructions_data()
+
+            # Find tech stack from decisions (usually TECH-002)
+            tech_stack_decision = next(
+                (d for d in decisions_list if d.get("area") == "Technology Stack"),
+                {}
+            )
+            tech_decision = tech_stack_decision.get("decision", {})
+            if isinstance(tech_decision, str):
+                tech_decision = {}
 
             summary = {
                 "CRITICAL_INSTRUCTION": {
@@ -138,24 +186,44 @@ How can I help you today?"""
                     "owners": list(company.get("holding_company", {}).get("ownership", {}).keys())
                 },
                 "tech_stack": {
-                    "frontend": decisions.get("decisions", [{}])[1].get("decision", {}).get("frontend", {}),
-                    "backend": decisions.get("decisions", [{}])[1].get("decision", {}).get("backend", {}),
-                    "database": decisions.get("decisions", [{}])[1].get("decision", {}).get("database", {})
+                    "frontend": tech_decision.get("frontend", {}),
+                    "backend": tech_decision.get("backend", {}),
+                    "database": tech_decision.get("database", {})
                 },
                 "domains": {
                     "total": domains.get("summary", {}).get("total_domains"),
                     "active": domains.get("tiers", {}).get("tier1_active_now", {}).get("domains", [])
                 },
                 "tasks": {
-                    "total_pending": len(pending_tasks),
-                    "high_priority": len(high_priority),
-                    "high_priority_tasks": [{"id": t.get("id"), "description": t.get("description")} for t in high_priority]
+                    "total_pending": pending_count,
+                    "high_priority": high_priority_count,
+                    "high_priority_tasks": [{"id": t.get("id"), "description": t.get("description")} for t in high_priority_tasks]
                 }
             }
 
             return [TextContent(type="text", text=json.dumps(summary, indent=2))]
 
         elif name == "add_decision":
+            # Use Supabase if available
+            if _use_supabase():
+                new_id = get_next_decision_id()
+                new_decision = {
+                    "id": new_id,
+                    "area": arguments["area"],
+                    "date_decided": datetime.now().strftime("%Y-%m-%d"),
+                    "confidence": arguments.get("confidence", "Medium"),
+                    "decision": arguments["decision"],
+                    "rationale": arguments["rationale"],
+                    "company": arguments["company"],
+                    "created_at": datetime.now().isoformat(),
+                }
+                if arguments.get("alternatives_considered"):
+                    new_decision["alternatives_considered"] = arguments["alternatives_considered"]
+
+                result = sb_add_decision(new_decision)
+                return [TextContent(type="text", text=f"Decision recorded successfully:\n{json.dumps(result, indent=2)}")]
+
+            # Fallback to JSON file
             data = load_json("technology_decisions.json")
             decisions = data.get("decisions", [])
 
@@ -189,6 +257,15 @@ How can I help you today?"""
             return [TextContent(type="text", text=f"Decision recorded successfully:\n{json.dumps(new_decision, indent=2)}")]
 
         elif name == "get_decisions_history":
+            # Use Supabase if available
+            if _use_supabase():
+                decisions = sb_get_decisions(
+                    area=arguments.get("area"),
+                    company=arguments.get("company"),
+                )
+                return [TextContent(type="text", text=json.dumps(decisions, indent=2))]
+
+            # Fallback to JSON file
             data = load_json("technology_decisions.json")
             decisions = data.get("decisions", [])
 

@@ -4,6 +4,7 @@ import logging
 from typing import Optional
 
 from ..storage import StorageBackend, LocalStorage
+from ..supabase_client import is_supabase_available
 
 logger = logging.getLogger("om-apex-mcp")
 
@@ -13,12 +14,23 @@ _backend: Optional[StorageBackend] = None
 # Relative path for daily progress within shared drive
 DAILY_PROGRESS_REL = "business-plan/06 HR and Admin/Daily Progress"
 
+# Flag to prefer Supabase for tasks/decisions when available
+_use_supabase = True
 
-def init_storage(backend: StorageBackend) -> None:
-    """Initialize the global storage backend. Called once at server startup."""
-    global _backend
+
+def init_storage(backend: StorageBackend, use_supabase: bool = True) -> None:
+    """Initialize the global storage backend. Called once at server startup.
+
+    Args:
+        backend: Storage backend for file operations (daily progress, documents, etc.)
+        use_supabase: Whether to use Supabase for tasks/decisions when available.
+    """
+    global _backend, _use_supabase
     _backend = backend
+    _use_supabase = use_supabase
     logger.info(f"Storage backend initialized: {type(backend).__name__}")
+    if use_supabase and is_supabase_available():
+        logger.info("Supabase available - using for tasks and decisions")
 
 
 def get_backend() -> StorageBackend:
