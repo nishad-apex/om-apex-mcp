@@ -462,3 +462,24 @@ def has_company_configs_table() -> bool:
         return True
     except Exception:
         return False
+
+
+def delete_document_template(template_id: str) -> bool:
+    """Delete a document template from Supabase.
+
+    Args:
+        template_id: Template ID (e.g., 'operating-agreement-template')
+
+    Returns:
+        True if deleted, False if not found or error.
+    """
+    client = get_supabase_client()
+    if not client:
+        raise RuntimeError("Supabase not available")
+
+    try:
+        response = client.table("document_templates").delete().eq("id", template_id).execute()
+        return len(response.data) > 0
+    except Exception as e:
+        logger.error(f"Failed to delete template {template_id}: {e}")
+        return False

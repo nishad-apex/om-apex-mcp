@@ -26,6 +26,7 @@ from ..supabase_client import (
     get_document_templates as sb_get_templates,
     get_document_template as sb_get_template,
     upsert_document_template as sb_upsert_template,
+    delete_document_template as sb_delete_template,
     get_company_configs as sb_get_configs,
     get_company_config as sb_get_config,
     upsert_company_config as sb_upsert_config,
@@ -34,7 +35,14 @@ from ..supabase_client import (
 )
 
 READING = ["list_company_configs", "list_document_templates", "view_document_template", "get_brand_assets"]
-WRITING = ["generate_branded_html", "generate_company_document", "sync_templates_to_supabase"]
+WRITING = [
+    "generate_branded_html",
+    "generate_company_document",
+    "sync_templates_to_supabase",
+    "create_document_template",
+    "update_document_template",
+    "delete_document_template",
+]
 
 # Known company config locations relative to shared drive root
 COMPANY_CONFIG_PATHS = [
@@ -877,6 +885,80 @@ def register() -> ToolModule:
             description="Sync document templates and company configs from local Google Drive to Supabase for remote access. Only works when local storage is available.",
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
+        Tool(
+            name="create_document_template",
+            description=(
+                "Create a new document template in Supabase. Templates use {{variable}} placeholders "
+                "that are resolved from company-config.json when generating documents. "
+                "Example: create_document_template(name='NDA-Template', content='# Non-Disclosure Agreement\\n\\nThis NDA is between {{company_name}} and...')"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Template name (will become the ID in lowercase with hyphens), e.g. 'NDA-Template', 'Invoice-Template'",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Markdown content of the template. Use {{variable}} placeholders for dynamic values (e.g., {{company_name}}, {{date}}, {{manager_name}})",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description of what this template is for",
+                    },
+                },
+                "required": ["name", "content"],
+            },
+        ),
+        Tool(
+            name="update_document_template",
+            description=(
+                "Update an existing document template in Supabase. You can update the content, name, or description. "
+                "Use view_document_template first to see the current content. "
+                "Example: update_document_template(template_id='nda-template', content='# Updated NDA\\n\\n...')"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "template_id": {
+                        "type": "string",
+                        "description": "Template ID (lowercase with hyphens), e.g. 'operating-agreement-template', 'nda-template'",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "New template name (optional - only if renaming)",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "New markdown content for the template (optional - only if updating content)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New description (optional)",
+                    },
+                },
+                "required": ["template_id"],
+            },
+        ),
+        Tool(
+            name="delete_document_template",
+            description=(
+                "Delete a document template from Supabase. This action is permanent. "
+                "Use list_document_templates to see available templates and their IDs. "
+                "Example: delete_document_template(template_id='old-template')"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "template_id": {
+                        "type": "string",
+                        "description": "Template ID to delete (lowercase with hyphens), e.g. 'nda-template'",
+                    },
+                },
+                "required": ["template_id"],
+            },
+        ),
     ]
 
     async def handler(name: str, arguments: dict):
@@ -1274,6 +1356,145 @@ def register() -> ToolModule:
                 summary += f"\n\nErrors ({len(results['errors'])}):\n" + "\n".join(results["errors"])
 
             return [TextContent(type="text", text=summary + "\n\n" + json.dumps(results, indent=2))]
+
+        elif name == "create_document_template":
+            template_name = arguments.get("name", "").strip()
+            content = arguments.get("content", "")
+            description = arguments.get("description", "")
+
+            if not template_name:
+                return [TextContent(type="text", text="Error: 'name' is required.")]
+            if not content:
+                return [TextContent(type="text", text="Error: 'content' is required.")]
+
+            if not is_supabase_available():
+                return [TextContent(type="text", text="Error: Supabase is not configured. Templates require Supabase storage.")]
+
+            # Generate template ID from name
+            template_id = template_name.lower().replace(" ", "-")
+
+            # Check if template already exists
+            existing = sb_get_template(template_id)
+            if existing:
+                return [TextContent(type="text", text=(
+                    f"Error: Template '{template_id}' already exists.\n"
+                    f"Use update_document_template to modify it, or choose a different name."
+                ))]
+
+            # Extract variables from content
+            variables = sorted(set(re.findall(r"\{\{(\w+)\}\}", content)))
+
+            # Create the template
+            template = {
+                "id": template_id,
+                "name": template_name,
+                "filename": f"{template_name}.md",
+                "content": content,
+                "variables": variables,
+                "description": description,
+            }
+
+            try:
+                sb_upsert_template(template)
+                return [TextContent(type="text", text=(
+                    f"Template created successfully!\n\n"
+                    f"**ID:** {template_id}\n"
+                    f"**Name:** {template_name}\n"
+                    f"**Variables ({len(variables)}):** {', '.join(variables) if variables else 'None'}\n\n"
+                    f"Use `generate_company_document(template='{template_name}', company='...')` to generate documents from this template."
+                ))]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Error creating template: {e}")]
+
+        elif name == "update_document_template":
+            template_id = arguments.get("template_id", "").strip().lower()
+            new_name = arguments.get("name", "").strip()
+            new_content = arguments.get("content", "")
+            new_description = arguments.get("description")
+
+            if not template_id:
+                return [TextContent(type="text", text="Error: 'template_id' is required.")]
+
+            if not new_name and not new_content and new_description is None:
+                return [TextContent(type="text", text="Error: Provide at least one field to update (name, content, or description).")]
+
+            if not is_supabase_available():
+                return [TextContent(type="text", text="Error: Supabase is not configured. Templates require Supabase storage.")]
+
+            # Fetch existing template
+            existing = sb_get_template(template_id)
+            if not existing:
+                templates = sb_get_templates()
+                available = [t["id"] for t in templates]
+                return [TextContent(type="text", text=(
+                    f"Error: Template '{template_id}' not found.\n"
+                    f"Available templates: {', '.join(available) if available else 'None'}"
+                ))]
+
+            # Build updated template
+            updated = {
+                "id": template_id,
+                "name": new_name if new_name else existing.get("name", template_id),
+                "filename": f"{new_name}.md" if new_name else existing.get("filename", f"{template_id}.md"),
+                "content": new_content if new_content else existing.get("content", ""),
+                "description": new_description if new_description is not None else existing.get("description", ""),
+            }
+
+            # Recalculate variables if content changed
+            content_for_vars = new_content if new_content else existing.get("content", "")
+            updated["variables"] = sorted(set(re.findall(r"\{\{(\w+)\}\}", content_for_vars)))
+
+            try:
+                sb_upsert_template(updated)
+                changes = []
+                if new_name:
+                    changes.append(f"name → '{new_name}'")
+                if new_content:
+                    changes.append("content updated")
+                if new_description is not None:
+                    changes.append(f"description → '{new_description}'")
+
+                return [TextContent(type="text", text=(
+                    f"Template updated successfully!\n\n"
+                    f"**ID:** {template_id}\n"
+                    f"**Changes:** {', '.join(changes)}\n"
+                    f"**Variables ({len(updated['variables'])}):** {', '.join(updated['variables']) if updated['variables'] else 'None'}"
+                ))]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Error updating template: {e}")]
+
+        elif name == "delete_document_template":
+            template_id = arguments.get("template_id", "").strip().lower()
+
+            if not template_id:
+                return [TextContent(type="text", text="Error: 'template_id' is required.")]
+
+            if not is_supabase_available():
+                return [TextContent(type="text", text="Error: Supabase is not configured. Templates require Supabase storage.")]
+
+            # Check if template exists
+            existing = sb_get_template(template_id)
+            if not existing:
+                templates = sb_get_templates()
+                available = [t["id"] for t in templates]
+                return [TextContent(type="text", text=(
+                    f"Error: Template '{template_id}' not found.\n"
+                    f"Available templates: {', '.join(available) if available else 'None'}"
+                ))]
+
+            template_name = existing.get("name", template_id)
+
+            try:
+                deleted = sb_delete_template(template_id)
+                if deleted:
+                    return [TextContent(type="text", text=(
+                        f"Template deleted successfully!\n\n"
+                        f"**Deleted:** {template_name} (ID: {template_id})"
+                    ))]
+                else:
+                    return [TextContent(type="text", text=f"Error: Failed to delete template '{template_id}'.")]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Error deleting template: {e}")]
 
         return None
 
