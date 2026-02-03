@@ -18,3 +18,8 @@ services:
         value: "/app/service-account.json"
       - key: GOOGLE_SHARED_DRIVE_ID
         sync: false
+      # Supabase - required for tasks and decisions (added 2026-02-03)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
