@@ -74,28 +74,35 @@ def get_supabase_client():
 
     try:
         from supabase import create_client
-        from supabase.lib.client_options import ClientOptions
-        import httpx
 
-        # Configure httpx with timeout and HTTP/1.1 (more reliable than HTTP/2 in some envs)
-        # HTTP/2 can cause stream reset errors in containerized environments
-        http_client = httpx.Client(
-            timeout=httpx.Timeout(SUPABASE_TIMEOUT),
-            http2=False,  # Use HTTP/1.1 for reliability
-        )
+        # Create client with default settings first
+        _supabase_client = create_client(url, key)
 
-        options = ClientOptions(
-            postgrest_client_timeout=SUPABASE_TIMEOUT,
-        )
+        # Try to configure httpx for HTTP/1.1 and timeout (more reliable in containers)
+        # This is a best-effort optimization - client works without it
+        try:
+            import httpx
 
-        _supabase_client = create_client(url, key, options=options)
+            http_client = httpx.Client(
+                timeout=httpx.Timeout(SUPABASE_TIMEOUT),
+                http2=False,  # HTTP/1.1 avoids stream reset errors
+            )
 
-        # Replace the internal httpx client with our configured one
-        # This ensures timeout and HTTP/1.1 settings are applied
-        if hasattr(_supabase_client, 'postgrest') and hasattr(_supabase_client.postgrest, '_client'):
-            _supabase_client.postgrest._client = http_client
+            # Apply to postgrest client if accessible
+            if hasattr(_supabase_client, 'postgrest'):
+                postgrest = _supabase_client.postgrest
+                if hasattr(postgrest, '_client'):
+                    postgrest._client = http_client
+                    logger.info(f"Supabase client configured (timeout={SUPABASE_TIMEOUT}s, http2=False)")
+                else:
+                    logger.info("Supabase client initialized (default httpx settings)")
+            else:
+                logger.info("Supabase client initialized (default settings)")
+        except Exception as config_err:
+            # httpx configuration failed but client still works
+            logger.warning(f"Could not configure httpx: {config_err}")
+            logger.info("Supabase client initialized (default settings)")
 
-        logger.info(f"Supabase client initialized (timeout={SUPABASE_TIMEOUT}s, http2=False)")
         return _supabase_client
     except Exception as e:
         logger.error(f"Failed to create Supabase client: {e}")
