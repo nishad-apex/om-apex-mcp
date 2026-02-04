@@ -1,15 +1,19 @@
-"""Shared utilities for all tool modules."""
+"""Shared utilities for all tool modules.
+
+Error Handling:
+- All functions are wrapped to prevent crashes
+- Sensible defaults are returned on error
+- Errors are logged with full context
+"""
 
 import logging
+import traceback
 from typing import Optional
-
-from ..storage import StorageBackend, LocalStorage
-from ..supabase_client import is_supabase_available
 
 logger = logging.getLogger("om-apex-mcp")
 
 # Global storage backend — initialized by server startup
-_backend: Optional[StorageBackend] = None
+_backend = None  # Type: Optional[StorageBackend]
 
 # Relative path for daily progress within shared drive
 DAILY_PROGRESS_REL = "business-plan/06 HR and Admin/Daily Progress"
@@ -18,27 +22,58 @@ DAILY_PROGRESS_REL = "business-plan/06 HR and Admin/Daily Progress"
 _use_supabase = True
 
 
-def init_storage(backend: StorageBackend, use_supabase: bool = True) -> None:
+def init_storage(backend, use_supabase: bool = True) -> None:
     """Initialize the global storage backend. Called once at server startup.
 
     Args:
         backend: Storage backend for file operations (daily progress, documents, etc.)
         use_supabase: Whether to use Supabase for tasks/decisions when available.
+
+    Note: Does not raise exceptions - logs errors and continues.
     """
     global _backend, _use_supabase
-    _backend = backend
-    _use_supabase = use_supabase
-    logger.info(f"Storage backend initialized: {type(backend).__name__}")
-    if use_supabase and is_supabase_available():
-        logger.info("Supabase available - using for tasks and decisions")
+
+    try:
+        _backend = backend
+        _use_supabase = use_supabase
+        logger.info(f"Storage backend initialized: {type(backend).__name__}")
+
+        # Check Supabase availability (import here to avoid circular import)
+        if use_supabase:
+            try:
+                from ..supabase_client import is_supabase_available
+                if is_supabase_available():
+                    logger.info("Supabase available - using for tasks and decisions")
+                else:
+                    logger.info("Supabase not available - using file storage for tasks/decisions")
+            except ImportError as e:
+                logger.warning(f"Could not import supabase_client: {e}")
+            except Exception as e:
+                logger.warning(f"Error checking Supabase availability: {e}")
+    except Exception as e:
+        logger.error(f"Error in init_storage: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
 
 
-def get_backend() -> StorageBackend:
-    """Get the current storage backend, lazily initializing if needed."""
+def get_backend():
+    """Get the current storage backend, lazily initializing if needed.
+
+    Returns:
+        StorageBackend instance. Creates LocalStorage if not initialized.
+    """
     global _backend
+
     if _backend is None:
-        _backend = LocalStorage()
-        logger.info("Storage backend auto-initialized to LocalStorage")
+        try:
+            # Import here to avoid circular import at module load time
+            from ..storage import LocalStorage
+            _backend = LocalStorage()
+            logger.info("Storage backend auto-initialized to LocalStorage")
+        except Exception as e:
+            logger.error(f"Failed to auto-initialize LocalStorage: {e}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+            raise RuntimeError(f"Cannot initialize storage backend: {e}") from e
+
     return _backend
 
 

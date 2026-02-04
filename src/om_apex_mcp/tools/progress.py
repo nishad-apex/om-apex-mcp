@@ -1,8 +1,15 @@
-"""Daily progress tools: get, add, search."""
+"""Daily progress tools: get, add, search.
+
+Error Handling:
+- All tool handlers are wrapped with try/except
+- Errors return helpful messages instead of crashing
+- Backend operations handle missing files gracefully
+"""
 
 import json
 import logging
 import re
+import traceback
 from datetime import datetime
 
 from mcp.types import Tool, TextContent
@@ -24,9 +31,9 @@ def register() -> ToolModule:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format (e.g., '2026-01-21')"},
+                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format (e.g., '2026-01-21'). Defaults to today if not provided."},
                 },
-                "required": ["date"],
+                "required": [],  # date is now optional, defaults to today
             },
         ),
         Tool(
@@ -63,159 +70,185 @@ def register() -> ToolModule:
     ]
 
     async def handler(name: str, arguments: dict):
-        backend = get_backend()
+        try:
+            backend = get_backend()
+        except Exception as e:
+            logger.error(f"Failed to get storage backend: {e}")
+            return [TextContent(type="text", text=f"Error: Storage backend unavailable - {e}")]
 
         if name == "get_daily_progress":
-            date = arguments["date"]
+            try:
+                # Default to today if date not provided
+                date = arguments.get("date")
+                if not date:
+                    date = datetime.now().strftime("%Y-%m-%d")
+                    logger.info(f"get_daily_progress: No date provided, using today: {date}")
 
-            # Try exact match
-            exact_path = f"{DAILY_PROGRESS_REL}/{date}.md"
-            content = backend.read_text(exact_path)
-            if content is not None:
-                return [TextContent(type="text", text=content)]
-
-            # Try fuzzy match via listing
-            files = backend.list_files(DAILY_PROGRESS_REL, f"{date}*.md")
-            if files:
-                content = backend.read_text(files[0])
+                # Try exact match
+                exact_path = f"{DAILY_PROGRESS_REL}/{date}.md"
+                content = backend.read_text(exact_path)
                 if content is not None:
-                    filename = files[0].rsplit("/", 1)[-1]
-                    return [TextContent(type="text", text=f"File: {filename}\n\n{content}")]
+                    return [TextContent(type="text", text=content)]
 
-            return [TextContent(type="text", text=f"No daily progress log found for {date}")]
+                # Try fuzzy match via listing
+                files = backend.list_files(DAILY_PROGRESS_REL, f"{date}*.md")
+                if files:
+                    content = backend.read_text(files[0])
+                    if content is not None:
+                        filename = files[0].rsplit("/", 1)[-1]
+                        return [TextContent(type="text", text=f"File: {filename}\n\n{content}")]
+
+                return [TextContent(type="text", text=f"No daily progress log found for {date}")]
+            except Exception as e:
+                logger.error(f"Error in get_daily_progress: {e}")
+                logger.error(f"Traceback:\n{traceback.format_exc()}")
+                return [TextContent(type="text", text=f"Error getting daily progress: {e}")]
 
         elif name == "add_daily_progress":
-            person = arguments["person"]
-            interface = arguments["interface"].lower()
-            title = arguments["title"]
+            try:
+                person = arguments.get("person", "Unknown")
+                interface = arguments.get("interface", "unknown").lower()
+                title = arguments.get("title", "Untitled Session")
 
-            today = datetime.now().strftime("%Y-%m-%d")
-            timestamp = datetime.now().strftime("%I:%M %p EST").lstrip("0")
+                today = datetime.now().strftime("%Y-%m-%d")
+                timestamp = datetime.now().strftime("%I:%M %p EST").lstrip("0")
 
-            filepath = f"{DAILY_PROGRESS_REL}/{today}.md"
+                filepath = f"{DAILY_PROGRESS_REL}/{today}.md"
 
-            session_num = 1
-            existing_content = backend.read_text(filepath)
+                session_num = 1
+                existing_content = backend.read_text(filepath)
 
-            if existing_content:
-                session_matches = re.findall(r"## Session (\d+)", existing_content)
-                if session_matches:
-                    session_num = max(int(n) for n in session_matches) + 1
+                if existing_content:
+                    session_matches = re.findall(r"## Session (\d+)", existing_content)
+                    if session_matches:
+                        session_num = max(int(n) for n in session_matches) + 1
 
-            session_parts = []
-            session_parts.append(f"\n---\n")
-            session_parts.append(f"\n## Session {session_num} ({interface}) (by {person}) ({timestamp}) - {title}\n")
+                session_parts = []
+                session_parts.append(f"\n---\n")
+                session_parts.append(f"\n## Session {session_num} ({interface}) (by {person}) ({timestamp}) - {title}\n")
 
-            completed = arguments.get("completed", [])
-            if completed:
-                session_parts.append("\n### Completed\n")
-                for item in completed:
-                    session_parts.append(f"- {item}\n")
+                completed = arguments.get("completed", [])
+                if completed:
+                    session_parts.append("\n### Completed\n")
+                    for item in completed:
+                        session_parts.append(f"- {item}\n")
 
-            decisions = arguments.get("decisions", [])
-            if decisions:
-                session_parts.append("\n### Decisions Recorded\n")
-                for item in decisions:
-                    if ":" in item:
-                        parts = item.split(":", 1)
-                        session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
-                    else:
-                        session_parts.append(f"- **{item}**\n")
+                decisions = arguments.get("decisions", [])
+                if decisions:
+                    session_parts.append("\n### Decisions Recorded\n")
+                    for item in decisions:
+                        if ":" in item:
+                            parts = item.split(":", 1)
+                            session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
+                        else:
+                            session_parts.append(f"- **{item}**\n")
 
-            tasks_completed = arguments.get("tasks_completed", [])
-            if tasks_completed:
-                session_parts.append("\n### Tasks Completed\n")
-                for item in tasks_completed:
-                    if ":" in item:
-                        parts = item.split(":", 1)
-                        session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
-                    else:
-                        session_parts.append(f"- **{item}**\n")
+                tasks_completed = arguments.get("tasks_completed", [])
+                if tasks_completed:
+                    session_parts.append("\n### Tasks Completed\n")
+                    for item in tasks_completed:
+                        if ":" in item:
+                            parts = item.split(":", 1)
+                            session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
+                        else:
+                            session_parts.append(f"- **{item}**\n")
 
-            tasks_created = arguments.get("tasks_created", [])
-            if tasks_created:
-                session_parts.append("\n### Tasks Created\n")
-                for item in tasks_created:
-                    if ":" in item:
-                        parts = item.split(":", 1)
-                        session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
-                    else:
-                        session_parts.append(f"- **{item}**\n")
+                tasks_created = arguments.get("tasks_created", [])
+                if tasks_created:
+                    session_parts.append("\n### Tasks Created\n")
+                    for item in tasks_created:
+                        if ":" in item:
+                            parts = item.split(":", 1)
+                            session_parts.append(f"- **{parts[0]}**: {parts[1].strip()}\n")
+                        else:
+                            session_parts.append(f"- **{item}**\n")
 
-            files_modified = arguments.get("files_modified", [])
-            if files_modified:
-                session_parts.append("\n### Files Created/Modified\n")
-                for item in files_modified:
-                    session_parts.append(f"- {item}\n")
+                files_modified = arguments.get("files_modified", [])
+                if files_modified:
+                    session_parts.append("\n### Files Created/Modified\n")
+                    for item in files_modified:
+                        session_parts.append(f"- {item}\n")
 
-            notes = arguments.get("notes", [])
-            if notes:
-                session_parts.append("\n### Notes\n")
-                for item in notes:
-                    session_parts.append(f"- {item}\n")
+                notes = arguments.get("notes", [])
+                if notes:
+                    session_parts.append("\n### Notes\n")
+                    for item in notes:
+                        session_parts.append(f"- {item}\n")
 
-            session_entry = "".join(session_parts)
+                session_entry = "".join(session_parts)
 
-            if existing_content:
-                backend.append_text(filepath, session_entry)
-            else:
-                file_header = f"# Daily Progress - {today}\n"
-                backend.write_text(filepath, file_header + session_entry)
+                if existing_content:
+                    backend.append_text(filepath, session_entry)
+                else:
+                    file_header = f"# Daily Progress - {today}\n"
+                    backend.write_text(filepath, file_header + session_entry)
 
-            filename = filepath.rsplit("/", 1)[-1]
-            return [TextContent(type="text", text=f"Daily progress logged successfully:\n- File: {filename}\n- Session: {session_num}\n- Person: {person}\n- Interface: {interface}\n- Title: {title}")]
+                filename = filepath.rsplit("/", 1)[-1]
+                return [TextContent(type="text", text=f"Daily progress logged successfully:\n- File: {filename}\n- Session: {session_num}\n- Person: {person}\n- Interface: {interface}\n- Title: {title}")]
+            except Exception as e:
+                logger.error(f"Error in add_daily_progress: {e}")
+                logger.error(f"Traceback:\n{traceback.format_exc()}")
+                return [TextContent(type="text", text=f"Error adding daily progress: {e}")]
 
         elif name == "search_daily_progress":
-            search_text = arguments["search_text"].lower()
-            limit = arguments.get("limit", 10)
+            try:
+                search_text = arguments.get("search_text", "").lower()
+                limit = arguments.get("limit", 10)
 
-            md_files = backend.list_files(DAILY_PROGRESS_REL, "*.md")
+                if not search_text:
+                    return [TextContent(type="text", text="Error: search_text is required")]
 
-            if not md_files:
-                return [TextContent(type="text", text=f"No daily progress logs found")]
+                md_files = backend.list_files(DAILY_PROGRESS_REL, "*.md")
 
-            results = []
-            for filepath in md_files[:limit * 2]:
-                try:
-                    content = backend.read_text(filepath)
-                    if content is None:
-                        continue
+                if not md_files:
+                    return [TextContent(type="text", text=f"No daily progress logs found")]
 
-                    if search_text in content.lower():
-                        filename = filepath.rsplit("/", 1)[-1]
-                        stem = filename.rsplit(".", 1)[0]
-                        results.append({
-                            "file": filename,
-                            "date": stem.split("_")[0] if "_" in stem else stem,
-                            "content": content
-                        })
-
-                        if len(results) >= limit:
-                            break
-                except Exception as e:
-                    logger.error(f"Error reading {filepath}: {e}")
-                    continue
-
-            if not results:
                 results = []
-                for filepath in md_files[:limit]:
+                for filepath in md_files[:limit * 2]:
                     try:
                         content = backend.read_text(filepath)
                         if content is None:
                             continue
-                        filename = filepath.rsplit("/", 1)[-1]
-                        stem = filename.rsplit(".", 1)[0]
-                        results.append({
-                            "file": filename,
-                            "date": stem.split("_")[0] if "_" in stem else stem,
-                            "content": content
-                        })
-                    except Exception:
+
+                        if search_text in content.lower():
+                            filename = filepath.rsplit("/", 1)[-1]
+                            stem = filename.rsplit(".", 1)[0]
+                            results.append({
+                                "file": filename,
+                                "date": stem.split("_")[0] if "_" in stem else stem,
+                                "content": content
+                            })
+
+                            if len(results) >= limit:
+                                break
+                    except Exception as e:
+                        logger.error(f"Error reading {filepath}: {e}")
                         continue
 
-                return [TextContent(type="text", text=f"No exact matches for '{search_text}'. Returning {len(results)} recent logs for semantic analysis:\n\n" + json.dumps(results, indent=2))]
+                if not results:
+                    results = []
+                    for filepath in md_files[:limit]:
+                        try:
+                            content = backend.read_text(filepath)
+                            if content is None:
+                                continue
+                            filename = filepath.rsplit("/", 1)[-1]
+                            stem = filename.rsplit(".", 1)[0]
+                            results.append({
+                                "file": filename,
+                                "date": stem.split("_")[0] if "_" in stem else stem,
+                                "content": content
+                            })
+                        except Exception:
+                            continue
 
-            return [TextContent(type="text", text=f"Found {len(results)} matching logs:\n\n" + json.dumps(results, indent=2))]
+                    return [TextContent(type="text", text=f"No exact matches for '{search_text}'. Returning {len(results)} recent logs for semantic analysis:\n\n" + json.dumps(results, indent=2))]
+
+                return [TextContent(type="text", text=f"Found {len(results)} matching logs:\n\n" + json.dumps(results, indent=2))]
+            except Exception as e:
+                logger.error(f"Error in search_daily_progress: {e}")
+                logger.error(f"Traceback:\n{traceback.format_exc()}")
+                return [TextContent(type="text", text=f"Error searching daily progress: {e}")]
 
         return None
 

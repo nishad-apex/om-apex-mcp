@@ -6,17 +6,28 @@ Loads credentials from centralized config folder.
 Includes resilience features:
 - Configurable timeout (default 10s)
 - HTTP/1.1 fallback for environments with HTTP/2 issues
+- Comprehensive error handling to prevent crashes
+- Graceful fallback to None when Supabase is unavailable
 """
 
 import logging
 import os
 import platform
+import sys
+import traceback
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
-
 logger = logging.getLogger("om-apex-mcp")
+
+# Try to import dotenv, but don't fail if it's not available
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    logger.warning("python-dotenv not installed, will use environment variables only")
+    def load_dotenv(path):
+        """Stub for load_dotenv when dotenv is not installed."""
+        pass
 
 # Global client instance
 _supabase_client = None
@@ -46,36 +57,52 @@ def _get_config_path() -> Path:
 def get_supabase_client():
     """Get or create the Supabase client.
 
+    This function is called during server startup and during tool execution.
+    It must never raise an exception - always returns None on failure.
+
     Returns:
-        Supabase client instance, or None if configuration is missing.
+        Supabase client instance, or None if configuration is missing or creation fails.
     """
     global _supabase_client
 
     if _supabase_client is not None:
         return _supabase_client
 
-    # Load config from centralized location
-    config_path = _get_config_path()
-    if config_path.exists():
-        load_dotenv(config_path)
-        logger.info(f"Loaded Supabase config from: {config_path}")
-    else:
-        logger.warning(f"Supabase config not found at: {config_path}")
-
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
-
-    if not url or not key:
-        logger.warning("Supabase credentials not found - falling back to JSON storage")
-        return None
-
-    # Strip any whitespace from the key (can happen with copy/paste)
-    key = key.strip().replace("\n", "").replace(" ", "")
-
     try:
-        from supabase import create_client
+        # Load config from centralized location
+        config_path = _get_config_path()
+        try:
+            if config_path.exists():
+                load_dotenv(config_path)
+                logger.info(f"Loaded Supabase config from: {config_path}")
+            else:
+                logger.warning(f"Supabase config not found at: {config_path}")
+        except Exception as env_err:
+            logger.warning(f"Error loading .env file: {env_err}")
+
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
+
+        if not url:
+            logger.warning("SUPABASE_URL not set - Supabase disabled")
+            return None
+        if not key:
+            logger.warning("SUPABASE_SERVICE_KEY/SUPABASE_ANON_KEY not set - Supabase disabled")
+            return None
+
+        # Strip any whitespace from the key (can happen with copy/paste)
+        key = key.strip().replace("\n", "").replace(" ", "")
+
+        # Import supabase library
+        try:
+            from supabase import create_client
+        except ImportError as import_err:
+            logger.warning(f"Supabase library not installed: {import_err}")
+            logger.warning("Install with: pip install supabase")
+            return None
 
         # Create client with default settings first
+        logger.info(f"Creating Supabase client for URL: {url[:30]}...")
         _supabase_client = create_client(url, key)
 
         # Try to configure httpx for HTTP/1.1 and timeout (more reliable in containers)
@@ -98,14 +125,25 @@ def get_supabase_client():
                     logger.info("Supabase client initialized (default httpx settings)")
             else:
                 logger.info("Supabase client initialized (default settings)")
+        except ImportError:
+            logger.info("httpx not available for custom configuration")
         except Exception as config_err:
             # httpx configuration failed but client still works
             logger.warning(f"Could not configure httpx: {config_err}")
             logger.info("Supabase client initialized (default settings)")
 
+        # Test connection with a simple query
+        try:
+            _supabase_client.table("tasks").select("id").limit(1).execute()
+            logger.info("Supabase connection verified")
+        except Exception as conn_err:
+            logger.warning(f"Supabase connection test failed (may still work): {conn_err}")
+
         return _supabase_client
+
     except Exception as e:
         logger.error(f"Failed to create Supabase client: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
         return None
 
 
@@ -127,25 +165,31 @@ def get_tasks(
     """Get tasks from Supabase with optional filters.
 
     Returns:
-        List of task dictionaries.
+        List of task dictionaries. Empty list on error.
     """
-    client = get_supabase_client()
-    if not client:
+    try:
+        client = get_supabase_client()
+        if not client:
+            logger.debug("get_tasks: Supabase not available")
+            return []
+
+        query = client.table("tasks").select("*")
+
+        if company:
+            query = query.ilike("company", company)
+        if category:
+            query = query.ilike("category", category)
+        if status:
+            query = query.ilike("status", status)
+        if owner:
+            query = query.ilike("owner", owner)
+
+        response = query.order("created_at", desc=True).execute()
+        return response.data or []
+    except Exception as e:
+        logger.error(f"Error fetching tasks: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
         return []
-
-    query = client.table("tasks").select("*")
-
-    if company:
-        query = query.ilike("company", company)
-    if category:
-        query = query.ilike("category", category)
-    if status:
-        query = query.ilike("status", status)
-    if owner:
-        query = query.ilike("owner", owner)
-
-    response = query.order("created_at", desc=True).execute()
-    return response.data or []
 
 
 def add_task(task: dict) -> dict:
@@ -156,13 +200,29 @@ def add_task(task: dict) -> dict:
 
     Returns:
         The created task.
-    """
-    client = get_supabase_client()
-    if not client:
-        raise RuntimeError("Supabase not available")
 
-    response = client.table("tasks").insert(task).execute()
-    return response.data[0] if response.data else task
+    Raises:
+        RuntimeError: If Supabase is not available or insert fails.
+    """
+    try:
+        client = get_supabase_client()
+        if not client:
+            raise RuntimeError("Supabase not available - cannot add task")
+
+        response = client.table("tasks").insert(task).execute()
+        if response.data:
+            logger.info(f"Task created: {task.get('id', 'unknown')}")
+            return response.data[0]
+        else:
+            logger.warning(f"Task insert returned no data: {task}")
+            return task
+    except RuntimeError:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding task: {e}")
+        logger.error(f"Task data: {task}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        raise RuntimeError(f"Failed to add task: {e}") from e
 
 
 def update_task(task_id: str, updates: dict) -> Optional[dict]:
@@ -174,39 +234,65 @@ def update_task(task_id: str, updates: dict) -> Optional[dict]:
 
     Returns:
         The updated task, or None if not found.
-    """
-    client = get_supabase_client()
-    if not client:
-        raise RuntimeError("Supabase not available")
 
-    response = client.table("tasks").update(updates).eq("id", task_id).execute()
-    return response.data[0] if response.data else None
+    Raises:
+        RuntimeError: If Supabase is not available.
+    """
+    try:
+        client = get_supabase_client()
+        if not client:
+            raise RuntimeError("Supabase not available - cannot update task")
+
+        response = client.table("tasks").update(updates).eq("id", task_id).execute()
+        if response.data:
+            logger.info(f"Task updated: {task_id}")
+            return response.data[0]
+        else:
+            logger.warning(f"Task not found for update: {task_id}")
+            return None
+    except RuntimeError:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating task {task_id}: {e}")
+        logger.error(f"Updates: {updates}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        raise RuntimeError(f"Failed to update task: {e}") from e
 
 
 def get_next_task_id() -> str:
-    """Get the next available task ID."""
-    client = get_supabase_client()
-    if not client:
+    """Get the next available task ID.
+
+    Returns:
+        Next task ID (e.g., TASK-042). Returns TASK-001 on error.
+    """
+    try:
+        client = get_supabase_client()
+        if not client:
+            logger.debug("get_next_task_id: Supabase not available, returning TASK-001")
+            return "TASK-001"
+
+        response = (
+            client.table("tasks")
+            .select("id")
+            .like("id", "TASK-%")
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if response.data:
+            last_id = response.data[0]["id"]
+            try:
+                num = int(last_id.split("-")[1])
+                return f"TASK-{num + 1:03d}"
+            except (ValueError, IndexError) as parse_err:
+                logger.warning(f"Could not parse task ID '{last_id}': {parse_err}")
+                pass
+
         return "TASK-001"
-
-    response = (
-        client.table("tasks")
-        .select("id")
-        .like("id", "TASK-%")
-        .order("id", desc=True)
-        .limit(1)
-        .execute()
-    )
-
-    if response.data:
-        last_id = response.data[0]["id"]
-        try:
-            num = int(last_id.split("-")[1])
-            return f"TASK-{num + 1:03d}"
-        except (ValueError, IndexError):
-            pass
-
-    return "TASK-001"
+    except Exception as e:
+        logger.error(f"Error getting next task ID: {e}")
+        return "TASK-001"
 
 
 # =============================================================================
@@ -220,21 +306,27 @@ def get_decisions(
     """Get decisions from Supabase with optional filters.
 
     Returns:
-        List of decision dictionaries.
+        List of decision dictionaries. Empty list on error.
     """
-    client = get_supabase_client()
-    if not client:
+    try:
+        client = get_supabase_client()
+        if not client:
+            logger.debug("get_decisions: Supabase not available")
+            return []
+
+        query = client.table("decisions").select("*")
+
+        if area:
+            query = query.ilike("area", f"%{area}%")
+        if company:
+            query = query.ilike("company", company)
+
+        response = query.order("date_decided", desc=True).execute()
+        return response.data or []
+    except Exception as e:
+        logger.error(f"Error fetching decisions: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
         return []
-
-    query = client.table("decisions").select("*")
-
-    if area:
-        query = query.ilike("area", f"%{area}%")
-    if company:
-        query = query.ilike("company", company)
-
-    response = query.order("date_decided", desc=True).execute()
-    return response.data or []
 
 
 def add_decision(decision: dict) -> dict:
@@ -245,39 +337,65 @@ def add_decision(decision: dict) -> dict:
 
     Returns:
         The created decision.
-    """
-    client = get_supabase_client()
-    if not client:
-        raise RuntimeError("Supabase not available")
 
-    response = client.table("decisions").insert(decision).execute()
-    return response.data[0] if response.data else decision
+    Raises:
+        RuntimeError: If Supabase is not available or insert fails.
+    """
+    try:
+        client = get_supabase_client()
+        if not client:
+            raise RuntimeError("Supabase not available - cannot add decision")
+
+        response = client.table("decisions").insert(decision).execute()
+        if response.data:
+            logger.info(f"Decision created: {decision.get('id', 'unknown')}")
+            return response.data[0]
+        else:
+            logger.warning(f"Decision insert returned no data: {decision}")
+            return decision
+    except RuntimeError:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding decision: {e}")
+        logger.error(f"Decision data: {decision}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        raise RuntimeError(f"Failed to add decision: {e}") from e
 
 
 def get_next_decision_id() -> str:
-    """Get the next available decision ID."""
-    client = get_supabase_client()
-    if not client:
+    """Get the next available decision ID.
+
+    Returns:
+        Next decision ID (e.g., TECH-042). Returns TECH-001 on error.
+    """
+    try:
+        client = get_supabase_client()
+        if not client:
+            logger.debug("get_next_decision_id: Supabase not available, returning TECH-001")
+            return "TECH-001"
+
+        response = (
+            client.table("decisions")
+            .select("id")
+            .like("id", "TECH-%")
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if response.data:
+            last_id = response.data[0]["id"]
+            try:
+                num = int(last_id.split("-")[1])
+                return f"TECH-{num + 1:03d}"
+            except (ValueError, IndexError) as parse_err:
+                logger.warning(f"Could not parse decision ID '{last_id}': {parse_err}")
+                pass
+
         return "TECH-001"
-
-    response = (
-        client.table("decisions")
-        .select("id")
-        .like("id", "TECH-%")
-        .order("id", desc=True)
-        .limit(1)
-        .execute()
-    )
-
-    if response.data:
-        last_id = response.data[0]["id"]
-        try:
-            num = int(last_id.split("-")[1])
-            return f"TECH-{num + 1:03d}"
-        except (ValueError, IndexError):
-            pass
-
-    return "TECH-001"
+    except Exception as e:
+        logger.error(f"Error getting next decision ID: {e}")
+        return "TECH-001"
 
 
 def get_task_count() -> dict:
@@ -285,26 +403,34 @@ def get_task_count() -> dict:
 
     Returns:
         Dictionary with total, pending, in_progress, completed, high_priority counts.
+        Returns zeros on error.
     """
-    client = get_supabase_client()
-    if not client:
-        return {"total": 0, "pending": 0, "in_progress": 0, "completed": 0, "high_priority": 0}
+    default_counts = {"total": 0, "pending": 0, "in_progress": 0, "completed": 0, "high_priority": 0}
 
-    all_tasks = client.table("tasks").select("status, priority").execute()
-    tasks = all_tasks.data or []
+    try:
+        client = get_supabase_client()
+        if not client:
+            logger.debug("get_task_count: Supabase not available")
+            return default_counts
 
-    pending = [t for t in tasks if t.get("status") == "pending"]
-    in_progress = [t for t in tasks if t.get("status") == "in_progress"]
-    completed = [t for t in tasks if t.get("status") == "completed"]
-    high_priority = [t for t in tasks if t.get("priority") == "High" and t.get("status") != "completed"]
+        all_tasks = client.table("tasks").select("status, priority").execute()
+        tasks = all_tasks.data or []
 
-    return {
-        "total": len(tasks),
-        "pending": len(pending),
-        "in_progress": len(in_progress),
-        "completed": len(completed),
-        "high_priority": len(high_priority),
-    }
+        pending = [t for t in tasks if t.get("status") == "pending"]
+        in_progress = [t for t in tasks if t.get("status") == "in_progress"]
+        completed = [t for t in tasks if t.get("status") == "completed"]
+        high_priority = [t for t in tasks if t.get("priority") == "High" and t.get("status") != "completed"]
+
+        return {
+            "total": len(tasks),
+            "pending": len(pending),
+            "in_progress": len(in_progress),
+            "completed": len(completed),
+            "high_priority": len(high_priority),
+        }
+    except Exception as e:
+        logger.error(f"Error getting task counts: {e}")
+        return default_counts
 
 
 # =============================================================================

@@ -2,13 +2,20 @@
 
 Provides a unified interface for file I/O that works with both
 local filesystem (Google Drive Desktop sync) and Google Drive API (remote).
+
+Error Handling:
+- All file operations are wrapped in try/except
+- Errors are logged with full context
+- Methods return sensible defaults (empty dict/list, None) on error
+- The server continues running even if storage operations fail
 """
 
 import json
 import logging
 import os
 import platform
-import re
+import sys
+import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
@@ -56,67 +63,212 @@ class StorageBackend(ABC):
 
 
 class LocalStorage(StorageBackend):
-    """Local filesystem storage — reads/writes via Google Drive Desktop sync."""
+    """Local filesystem storage — reads/writes via Google Drive Desktop sync.
+
+    All operations are wrapped in error handling to prevent crashes.
+    """
 
     def __init__(self, data_dir: Optional[Path] = None, shared_drive_root: Optional[Path] = None):
-        if data_dir is None:
-            data_dir = self._get_default_data_dir()
-        self.data_dir = Path(data_dir).expanduser()
-        self.shared_drive_root = shared_drive_root or self.data_dir.parent
-        logger.info(f"LocalStorage: data_dir={self.data_dir}, shared_drive_root={self.shared_drive_root}")
+        """Initialize LocalStorage with paths to data directory and shared drive.
+
+        Args:
+            data_dir: Path to mcp-data directory. Auto-detected if None.
+            shared_drive_root: Path to shared drive root. Defaults to data_dir parent.
+
+        Raises:
+            RuntimeError: If the data directory cannot be determined or accessed.
+        """
+        try:
+            if data_dir is None:
+                data_dir = self._get_default_data_dir()
+            self.data_dir = Path(data_dir).expanduser()
+            self.shared_drive_root = shared_drive_root or self.data_dir.parent
+
+            # Validate paths exist
+            if not self.data_dir.exists():
+                logger.warning(f"Data directory does not exist: {self.data_dir}")
+                logger.warning("Creating data directory...")
+                try:
+                    self.data_dir.mkdir(parents=True, exist_ok=True)
+                except Exception as mkdir_err:
+                    logger.error(f"Failed to create data directory: {mkdir_err}")
+
+            if not self.shared_drive_root.exists():
+                logger.warning(f"Shared drive root does not exist: {self.shared_drive_root}")
+                logger.warning("Google Drive may not be synced or mounted")
+
+            logger.info(f"LocalStorage: data_dir={self.data_dir}, shared_drive_root={self.shared_drive_root}")
+
+        except Exception as e:
+            logger.error(f"LocalStorage initialization error: {e}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+            raise RuntimeError(f"Failed to initialize LocalStorage: {e}") from e
 
     @staticmethod
     def _get_default_data_dir() -> Path:
-        if platform.system() == "Darwin":
-            return Path.home() / "Library/CloudStorage/GoogleDrive-nishad@omapex.com/Shared drives/om-apex/mcp-data"
-        elif platform.system() == "Windows":
-            return Path("H:/Shared drives/om-apex/mcp-data")
-        else:
-            return Path(__file__).parent.parent.parent / "data" / "context"
+        """Determine the default data directory based on platform.
+
+        Returns:
+            Path to the mcp-data directory.
+        """
+        try:
+            system = platform.system()
+            logger.info(f"Detecting data directory for platform: {system}")
+
+            if system == "Darwin":
+                path = Path.home() / "Library/CloudStorage/GoogleDrive-nishad@omapex.com/Shared drives/om-apex/mcp-data"
+            elif system == "Windows":
+                path = Path("H:/Shared drives/om-apex/mcp-data")
+            else:
+                path = Path(__file__).parent.parent.parent / "data" / "context"
+
+            logger.info(f"Default data directory: {path}")
+            return path
+
+        except Exception as e:
+            logger.error(f"Error determining default data dir: {e}")
+            # Fallback to a local directory
+            fallback = Path.home() / ".om-apex-mcp/data"
+            logger.warning(f"Using fallback data directory: {fallback}")
+            return fallback
 
     def load_json(self, filename: str) -> dict:
+        """Load a JSON file from the data directory.
+
+        Returns empty dict on any error (file not found, parse error, etc.)
+        """
         filepath = self.data_dir / filename
-        if filepath.exists():
-            with open(filepath, "r") as f:
-                return json.load(f)
-        return {}
+        try:
+            if filepath.exists():
+                with open(filepath, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            else:
+                logger.debug(f"JSON file not found (returning empty dict): {filepath}")
+                return {}
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in {filepath}: {e}")
+            logger.error(f"File may be corrupted. Consider restoring from backup.")
+            return {}
+        except PermissionError as e:
+            logger.error(f"Permission denied reading {filepath}: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Error loading JSON from {filepath}: {e}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+            return {}
 
     def save_json(self, filename: str, data: dict) -> None:
+        """Save data to a JSON file in the data directory.
+
+        Raises exception on error to allow caller to handle it.
+        """
         filepath = self.data_dir / filename
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        with open(filepath, "w") as f:
-            json.dump(data, f, indent=2)
+        try:
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            # Write to temp file first, then rename for atomicity
+            temp_path = filepath.with_suffix(".tmp")
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            temp_path.replace(filepath)
+            logger.debug(f"Saved JSON to {filepath}")
+        except PermissionError as e:
+            logger.error(f"Permission denied writing to {filepath}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error saving JSON to {filepath}: {e}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+            raise
 
     def read_text(self, path: str) -> Optional[str]:
+        """Read a text file by relative path from shared drive root.
+
+        Returns None if file not found or on error.
+        """
         filepath = self.shared_drive_root / path
-        if filepath.exists():
-            with open(filepath, "r", encoding="utf-8") as f:
-                return f.read()
-        return None
+        try:
+            if filepath.exists():
+                with open(filepath, "r", encoding="utf-8") as f:
+                    return f.read()
+            else:
+                logger.debug(f"Text file not found: {filepath}")
+                return None
+        except PermissionError as e:
+            logger.error(f"Permission denied reading {filepath}: {e}")
+            return None
+        except UnicodeDecodeError as e:
+            logger.error(f"Encoding error reading {filepath}: {e}")
+            # Try with a different encoding
+            try:
+                with open(filepath, "r", encoding="latin-1") as f:
+                    return f.read()
+            except Exception:
+                return None
+        except Exception as e:
+            logger.error(f"Error reading text from {filepath}: {e}")
+            return None
 
     def write_text(self, path: str, content: str) -> None:
+        """Write a text file by relative path from shared drive root."""
         filepath = self.shared_drive_root / path
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
+        try:
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            logger.debug(f"Wrote text to {filepath}")
+        except PermissionError as e:
+            logger.error(f"Permission denied writing to {filepath}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error writing text to {filepath}: {e}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+            raise
 
     def append_text(self, path: str, content: str) -> None:
+        """Append to a text file by relative path from shared drive root."""
         filepath = self.shared_drive_root / path
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        with open(filepath, "a", encoding="utf-8") as f:
-            f.write(content)
+        try:
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            with open(filepath, "a", encoding="utf-8") as f:
+                f.write(content)
+            logger.debug(f"Appended text to {filepath}")
+        except PermissionError as e:
+            logger.error(f"Permission denied appending to {filepath}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error appending text to {filepath}: {e}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
+            raise
 
     def list_files(self, directory: str, pattern: str = "*.md") -> list[str]:
+        """List files in a directory matching a glob pattern.
+
+        Returns empty list on error.
+        """
         dir_path = self.shared_drive_root / directory
-        if not dir_path.exists():
+        try:
+            if not dir_path.exists():
+                logger.debug(f"Directory not found: {dir_path}")
+                return []
+            files = sorted(
+                [str(f.relative_to(self.shared_drive_root)) for f in dir_path.glob(pattern)],
+                reverse=True,
+            )
+            logger.debug(f"Found {len(files)} files matching {pattern} in {directory}")
+            return files
+        except PermissionError as e:
+            logger.error(f"Permission denied listing {dir_path}: {e}")
             return []
-        return sorted(
-            [str(f.relative_to(self.shared_drive_root)) for f in dir_path.glob(pattern)],
-            reverse=True,
-        )
+        except Exception as e:
+            logger.error(f"Error listing files in {dir_path}: {e}")
+            return []
 
     def file_exists(self, path: str) -> bool:
-        return (self.shared_drive_root / path).exists()
+        """Check if a file exists at the given relative path."""
+        try:
+            return (self.shared_drive_root / path).exists()
+        except Exception as e:
+            logger.error(f"Error checking file existence for {path}: {e}")
+            return False
 
 
 class GoogleDriveStorage(StorageBackend):
