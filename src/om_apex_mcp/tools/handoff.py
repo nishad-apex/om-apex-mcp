@@ -40,7 +40,8 @@ def register() -> ToolModule:
             description=(
                 "Save the session handoff at session end. Archives the previous handoff to history. "
                 "Include: current state, deployment status, last session summary, active work by person, "
-                "blockers, key constants, recent decisions, git status, and system improvements."
+                "blockers, key constants, recent decisions, git status, and system improvements. "
+                "Use checkpoint=true for lightweight mid-session saves (skips history archive)."
             ),
             inputSchema={
                 "type": "object",
@@ -60,6 +61,13 @@ def register() -> ToolModule:
                             "Current State, Deployment Status, Last Session Summary, "
                             "Active Work by Person, Blockers, Key Constants, "
                             "Recent Decisions, Git Status, System Improvements (if any)"
+                        ),
+                    },
+                    "checkpoint": {
+                        "type": "boolean",
+                        "description": (
+                            "If true, save as a mid-session checkpoint (no history archive). "
+                            "Use for context compaction protection. Default: false."
                         ),
                     },
                 },
@@ -104,6 +112,7 @@ def register() -> ToolModule:
                 person = arguments.get("person", "Unknown")
                 interface = arguments.get("interface", "unknown")
                 content = arguments.get("content", "")
+                checkpoint = arguments.get("checkpoint", False)
 
                 if not content:
                     return [TextContent(type="text", text="Error: content is required")]
@@ -115,7 +124,15 @@ def register() -> ToolModule:
                              "Save content to .pending-sync.md in git and sync later.",
                     )]
 
-                result = sb_save_handoff(content, person, interface)
+                result = sb_save_handoff(content, person, interface, checkpoint=checkpoint)
+                if checkpoint:
+                    return [TextContent(
+                        type="text",
+                        text=f"Checkpoint handoff saved (no history archive).\n"
+                             f"- By: {person}\n"
+                             f"- Via: {interface}\n"
+                             f"- Purpose: context compaction protection.",
+                    )]
                 return [TextContent(
                     type="text",
                     text=f"Session handoff saved successfully.\n"

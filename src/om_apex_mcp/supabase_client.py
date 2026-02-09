@@ -617,15 +617,17 @@ def get_session_handoff() -> Optional[dict]:
         return None
 
 
-def save_session_handoff(content: str, created_by: str, interface: str) -> dict:
+def save_session_handoff(content: str, created_by: str, interface: str, checkpoint: bool = False) -> dict:
     """Save (upsert) the session handoff to Supabase.
 
-    Archives the previous handoff to history before overwriting.
+    Archives the previous handoff to history before overwriting,
+    unless checkpoint=True (lightweight update, no history archive).
 
     Args:
         content: Full markdown handoff content.
         created_by: Who wrote this ("Nishad" or "Sumedha").
         interface: Which Claude interface ("code", "chat", "cowork", "code-app").
+        checkpoint: If True, skip archiving to history (mid-session checkpoint).
 
     Returns:
         The saved handoff record.
@@ -638,21 +640,22 @@ def save_session_handoff(content: str, created_by: str, interface: str) -> dict:
         if not client:
             raise RuntimeError("Supabase not available - cannot save handoff")
 
-        # Archive previous handoff to history
-        try:
-            existing = client.table("session_handoff").select("*").eq("id", 1).execute()
-            if existing.data:
-                old = existing.data[0]
-                from datetime import datetime
-                client.table("session_handoff_history").insert({
-                    "content": old["content"],
-                    "created_by": old["created_by"],
-                    "interface": old["interface"],
-                    "session_date": old.get("updated_at", datetime.now().isoformat())[:10],
-                }).execute()
-                logger.info("Previous handoff archived to history")
-        except Exception as archive_err:
-            logger.warning(f"Could not archive previous handoff: {archive_err}")
+        # Archive previous handoff to history (skip for checkpoints)
+        if not checkpoint:
+            try:
+                existing = client.table("session_handoff").select("*").eq("id", 1).execute()
+                if existing.data:
+                    old = existing.data[0]
+                    from datetime import datetime
+                    client.table("session_handoff_history").insert({
+                        "content": old["content"],
+                        "created_by": old["created_by"],
+                        "interface": old["interface"],
+                        "session_date": old.get("updated_at", datetime.now().isoformat())[:10],
+                    }).execute()
+                    logger.info("Previous handoff archived to history")
+            except Exception as archive_err:
+                logger.warning(f"Could not archive previous handoff: {archive_err}")
 
         # Upsert current handoff
         from datetime import datetime
@@ -666,7 +669,8 @@ def save_session_handoff(content: str, created_by: str, interface: str) -> dict:
 
         response = client.table("session_handoff").upsert(handoff).execute()
         if response.data:
-            logger.info(f"Session handoff saved by {created_by} via {interface}")
+            mode = "checkpoint" if checkpoint else "full"
+            logger.info(f"Session handoff saved ({mode}) by {created_by} via {interface}")
             return response.data[0]
         return handoff
     except RuntimeError:
