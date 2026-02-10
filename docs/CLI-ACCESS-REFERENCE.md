@@ -129,6 +129,44 @@ render services -o json
 ~/om-apex/scripts/deploy-staging.sh [quorum|portal|all]
 ```
 
+## Local Development Setup Checklist
+
+When setting up a new laptop or onboarding a project for local dev, complete these steps:
+
+### 1. Supabase Auth Redirect URLs
+Each Supabase project with auth must allow localhost redirects. Without this, OAuth login redirects to production instead of localhost.
+
+| Supabase Project | Dashboard → Authentication → URL Configuration |
+|---|---|
+| Owner Portal (`hympgocuivzxzxllgmcy`) | Add `http://localhost:3001/**` |
+| AI Quorum (`ixncscosicyjzlopbfiz`) | Add `http://localhost:3000/**` |
+
+**Required redirect URLs per project** (all should be present):
+- `http://localhost:<port>/**` (local dev)
+- `https://<production-url>/**` (deployed site)
+- `https://*-<vercel-team>.vercel.app/**` (Vercel preview deploys, if needed)
+
+### 2. Environment Files
+Run the sync script to pull `.env.local` files from central config:
+- **Mac:** `~/om-apex/scripts/sync-env.sh`
+- **Windows:** `~/om-apex/scripts/sync-env.ps1`
+
+### 3. Port Verification
+Before starting a dev server, confirm the assigned port is free:
+```bash
+lsof -ti:<port>  # should return nothing
+```
+
+### 4. New Project Checklist
+When creating a new Supabase project or new local dev project:
+- [ ] Add localhost redirect URL to Supabase Auth settings
+- [ ] Add production redirect URL to Supabase Auth settings
+- [ ] Create `.env.local` with Supabase credentials
+- [ ] Add env file to `~/om-apex/config/` for central management
+- [ ] Update `sync-env.sh` / `sync-env.ps1` to include new project
+- [ ] Add port assignment to this doc (Local Development Ports table)
+- [ ] Test OAuth login flow locally before deploying
+
 ## Gotchas
 
 1. **Owner Portal Supabase** — NOT linked locally. Must use temp dir workaround (see above)
@@ -138,6 +176,7 @@ render services -o json
 5. **AI Quorum backend** — uses OpenRouter for LLM calls, not direct provider APIs
 6. **Cloudflare** — requires token from env: `CLOUDFLARE_API_TOKEN=$(grep CLOUDFLARE_API_TOKEN ~/om-apex/config/.env.cloudflare | cut -d= -f2) wrangler whoami`
 7. **Google Cloud** — may need `gcloud auth login` to refresh tokens
+8. **OAuth redirects to production from localhost** — Missing localhost in Supabase Auth redirect URLs. See "Local Development Setup Checklist" above
 
 ## MCP Server
 
