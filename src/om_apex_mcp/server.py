@@ -42,7 +42,7 @@ try:
     from .storage import StorageBackend, LocalStorage
     from .tools import ToolModule
     from .tools.helpers import init_storage
-    from .tools import context, tasks, progress, documents, calendar, handoff
+    from .tools import context, tasks, progress, documents, calendar, handoff, ai_quorum
 except ImportError as e:
     logger.critical(f"Failed to import local modules: {e}")
     logger.critical(f"Traceback:\n{traceback.format_exc()}")
@@ -137,6 +137,16 @@ def create_server(backend: Optional[StorageBackend] = None) -> Server:
         logger.error(f"Traceback:\n{traceback.format_exc()}")
         _handoff_mod = None
 
+    # AI Quorum module
+    try:
+        _quorum_mod = ai_quorum.register()
+        modules.append(_quorum_mod)
+        logger.info(f"AI Quorum module loaded ({len(_quorum_mod.tools)} tools)")
+    except Exception as e:
+        logger.error(f"Failed to load AI Quorum module: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        _quorum_mod = None
+
     # Phase 4: Build tool lists and register context module
     try:
         _all_reading = context.READING.copy()
@@ -157,6 +167,9 @@ def create_server(backend: Optional[StorageBackend] = None) -> Server:
         if _handoff_mod:
             _all_reading += _handoff_mod.reading_tools
             _all_writing += _handoff_mod.writing_tools
+        if _quorum_mod:
+            _all_reading += _quorum_mod.reading_tools
+            _all_writing += _quorum_mod.writing_tools
 
         _context_mod = context.register(_all_reading, _all_writing)
         modules.insert(0, _context_mod)  # Context module first

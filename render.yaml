@@ -23,3 +23,8 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      # AI Quorum Supabase (for quorum MCP tools)
+      - key: QUORUM_SUPABASE_URL
+        value: "https://ixncscosicyjzlopbfiz.supabase.co"
+      - key: QUORUM_SUPABASE_SERVICE_KEY
+        sync: false
