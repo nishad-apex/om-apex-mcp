@@ -161,6 +161,7 @@ def get_tasks(
     category: Optional[str] = None,
     status: Optional[str] = None,
     owner: Optional[str] = None,
+    task_type: Optional[str] = None,
 ) -> list[dict]:
     """Get tasks from Supabase with optional filters.
 
@@ -183,6 +184,8 @@ def get_tasks(
             query = query.ilike("status", status)
         if owner:
             query = query.ilike("owner", owner)
+        if task_type:
+            query = query.eq("task_type", task_type)
 
         response = query.order("created_at", desc=True).execute()
         return response.data or []

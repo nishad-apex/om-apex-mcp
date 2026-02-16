@@ -1,6 +1,6 @@
 # Database Schema Quick Reference
 
-> Last updated: 2026-02-13
+> Last updated: 2026-02-16
 
 ## Owner Portal (hympgocuivzxzxllgmcy)
 
@@ -24,6 +24,9 @@ Central task tracker for all Om Apex companies.
 | updated_at | TIMESTAMPTZ | Auto |
 | completed_at | TIMESTAMPTZ | Set on completion |
 | completion_notes | TEXT | What was done |
+| task_type | TEXT | `issue`, `dev`, `manual` (default: manual) |
+| commit_refs | TEXT[] | Git commit SHAs associated with task |
+| issue_ref | TEXT | GitHub issue reference (e.g., `om-apex/repo#123`) |
 
 ### decisions
 Technology and business decisions with rationale.

@@ -47,6 +47,7 @@ def register() -> ToolModule:
                     "category": {"type": "string", "description": "Filter by category (optional)"},
                     "status": {"type": "string", "description": "Filter by status: pending, in_progress, completed (optional)"},
                     "owner": {"type": "string", "description": "Filter by owner name (e.g., Nishad, Sumedha, Both, Claude, Scroggin, etc.)"},
+                    "task_type": {"type": "string", "description": "Filter by task type: issue, dev, manual (optional)"},
                 },
                 "required": [],
             },
@@ -62,6 +63,9 @@ def register() -> ToolModule:
                     "company": {"type": "string", "description": "Company: Om Apex Holdings, Om Luxe Properties, Om AI Solutions, Om Supply Chain"},
                     "priority": {"type": "string", "description": "Priority: High, Medium, Low"},
                     "notes": {"type": "string", "description": "Additional notes (optional)"},
+                    "task_type": {"type": "string", "description": "Task type: issue (from GitHub issue), dev (development work), manual (default). Default: manual", "enum": ["issue", "dev", "manual"]},
+                    "commit_refs": {"type": "array", "items": {"type": "string"}, "description": "Git commit SHAs associated with this task (optional)"},
+                    "issue_ref": {"type": "string", "description": "GitHub issue reference, e.g. 'om-apex/repo#123' (optional)"},
                 },
                 "required": ["description", "category", "company", "priority"],
             },
@@ -117,6 +121,7 @@ def register() -> ToolModule:
                 category=arguments.get("category"),
                 status=arguments.get("status"),
                 owner=arguments.get("owner"),
+                task_type=arguments.get("task_type"),
             )
             return [TextContent(type="text", text=json.dumps(tasks, indent=2))]
 
@@ -143,6 +148,12 @@ def register() -> ToolModule:
                 new_task["owner"] = owner
             if arguments.get("notes"):
                 new_task["notes"] = arguments["notes"]
+            if arguments.get("task_type"):
+                new_task["task_type"] = arguments["task_type"]
+            if arguments.get("commit_refs"):
+                new_task["commit_refs"] = arguments["commit_refs"]
+            if arguments.get("issue_ref"):
+                new_task["issue_ref"] = arguments["issue_ref"]
 
             result = sb_add_task(new_task)
             return [TextContent(type="text", text=f"Task created successfully:\n{json.dumps(result, indent=2)}")]
