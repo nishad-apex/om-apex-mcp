@@ -1,50 +1,70 @@
 {
-  "version": "1.0",
-  "last_updated": "2026-01-19",
-  "source": "Om_Apex_Domain_Inventory.docx",
+  "version": "1.1",
+  "last_updated": "2026-02-21",
+  "source": "Om_Apex_Domain_Inventory.docx + manual updates",
 
   "summary": {
-    "total_domains": 20,
+    "total_domains": 22,
     "primary_registrar": "Cloudflare",
-    "cloudflare_count": 19,
-    "transferring": 1,
+    "cloudflare_count": 22,
+    "transferring": 0,
     "discontinuing": 1,
-    "estimated_annual_cost": "$400-500"
+    "estimated_annual_cost": "$500-600"
   },
 
   "naming_convention": {
     "short_domains": "omXXX.com - Easy to type, memorable, primary branding",
     "long_domains": "SEO-friendly, descriptive, used for redirects or backup",
-    "ai_domains": ".ai - Premium AI branding for key products",
+    "ai_domains": ".ai - Premium AI branding for AI products (Om AI Solutions)",
+    "com_domains": ".com - Standard TLD for supply chain products (Om Supply Chain)",
     "reserved_domains": "Brand protection, prevent competitor registration"
+  },
+
+  "product_domain_mapping": {
+    "om_ai_solutions": {
+      "company_site": "omaisolutions.com",
+      "products": {
+        "AI Quorum": "aiquorum.ai",
+        "Om Cortex": "omcortex.ai",
+        "Om Voice": "omvoice.ai"
+      },
+      "note": ".ai TLD for all AI products"
+    },
+    "om_supply_chain": {
+      "company_site": "omsupplychain.com",
+      "products": {
+        "Om WMS": "omwms.com",
+        "Om LMS": "omlms.com",
+        "Om TMS": "omtms.com"
+      },
+      "note": ".com TLD for all supply chain products"
+    }
   },
 
   "tiers": {
     "tier1_active_now": {
       "description": "Currently in use or being deployed immediately",
-      "count": 3,
-      "domains": ["omapex.com", "omluxeproperties.com", "omaisolutions.com"]
+      "count": 5,
+      "domains": ["omapex.com", "omluxeproperties.com", "omaisolutions.com", "aiquorum.ai", "omcortex.ai"]
     },
     "tier2_near_term": {
       "description": "Will be activated as products launch in 2026",
-      "count": 4,
-      "domains": ["omwms.com", "omwms.ai", "omvoice.ai", "omvoiceai.com"]
+      "count": 6,
+      "domains": ["omwms.com", "omwms.ai", "omvoice.ai", "omvoiceai.com", "omlms.com", "omtms.com"]
     },
     "tier3_future": {
       "description": "Reserved for future product expansion",
-      "count": 9,
+      "count": 5,
       "product_groups": {
         "intelligent_integration": ["omintm.com", "omintegrator.com"],
         "store_management": ["omsfm.com", "omstorefront.com", "omshopfloor.com"],
-        "point_of_sale": ["omepos.com"],
-        "labor_management": ["omlms.com"],
-        "transportation_management": ["omtms.com"]
+        "point_of_sale": ["omepos.com"]
       }
     },
     "tier4_brand_protection": {
-      "description": "Reserved to prevent competitors",
-      "count": 3,
-      "domains": ["omsupplychain.ai", "omsupplychain.com", "omsupplychainsolutions.com"]
+      "description": "Reserved to prevent competitors or used as redirects",
+      "count": 4,
+      "domains": ["omquorum.com", "omsupplychain.ai", "omsupplychain.com", "omsupplychainsolutions.com"]
     },
     "tier5_discontinue": {
       "description": "Let expire - do NOT renew",
@@ -53,10 +73,9 @@
     }
   },
 
-  "pending_transfer": {
-    "domain": "omaisolutions.com",
-    "from": "GoDaddy",
-    "to": "Cloudflare",
-    "status": "In progress"
+  "redirects": {
+    "omquorum.com": "aiquorum.ai",
+    "omvoiceai.com": "omvoice.ai",
+    "omwms.ai": "omwms.com"
   }
 }
